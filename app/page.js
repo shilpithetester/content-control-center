@@ -7,138 +7,48 @@ const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SUPABASE_KEY = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-const PROVIDER_LABELS = {
-  anthropic:'Anthropic Claude',
-  openai:'OpenAI',
-  gemini:'Google Gemini',
-  openrouter:'OpenRouter',
-  openai_compatible:'Custom OpenAI-compatible'
-};
-const DEFAULT_MODELS = {
-  anthropic:'claude-sonnet-4-20250514',
-  openai:'gpt-4o-mini',
-  gemini:'gemini-2.0-flash',
-  openrouter:'openai/gpt-4o-mini',
-  openai_compatible:''
-};
+const PROVIDER_LABELS={anthropic:'Anthropic Claude',openai:'OpenAI',gemini:'Google Gemini',openrouter:'OpenRouter',openai_compatible:'Custom OpenAI-compatible'};
+const DEFAULT_MODELS={anthropic:'claude-sonnet-4-20250514',openai:'gpt-4o-mini',gemini:'gemini-2.0-flash',openrouter:'openai/gpt-4o-mini',openai_compatible:''};
+function Pill({value}){const v=value||'—';const cls=['CONTENT_LOCKED','APPROVED','PASS','ACTIVE','COMPLETED'].includes(v)?'pill green':['ERROR','REJECTED','FAIL','BLOCKED'].includes(v)?'pill red':v==='RUNNING'?'pill blue':['NEEDS_RESEARCH','NEEDS_REVISION','NEEDS_HUMAN_REVIEW','HOLD','PENDING','PLANNING','PENDING_APPROVAL'].includes(v)?'pill yellow':'pill';return <span className={cls}>{v}</span>}
+function lines(s){return String(s||'').split('\n').map(x=>x.trim()).filter(Boolean)}
 
-function Pill({ value }) {
-  const v = value || '—';
-  const cls = ['CONTENT_LOCKED','APPROVED','PASS'].includes(v) ? 'pill green' : ['ERROR','REJECTED','FAIL'].includes(v) ? 'pill red' : v === 'RUNNING' ? 'pill blue' : ['NEEDS_RESEARCH','NEEDS_REVISION','NEEDS_HUMAN_REVIEW','HOLD','PENDING'].includes(v) ? 'pill yellow' : 'pill';
-  return <span className={cls}>{v}</span>;
-}
+export default function Home(){
+ const[session,setSession]=useState(null),[email,setEmail]=useState(''),[password,setPassword]=useState(''),[authMsg,setAuthMsg]=useState('');
+ const[items,setItems]=useState([]),[summary,setSummary]=useState({total:0,running:0,review:0,locked:0,errors:0}),[selectedId,setSelectedId]=useState(null),[detail,setDetail]=useState(null),[tab,setTab]=useState('claims'),[loading,setLoading]=useState(false),[newTopic,setNewTopic]=useState(''),[newPillar,setNewPillar]=useState(''),[newPriority,setNewPriority]=useState(80);
+ const[llm,setLlm]=useState({provider:'anthropic',model:DEFAULT_MODELS.anthropic,base_url:'',temperature:0.2,max_tokens:2200}),[llmConfigured,setLlmConfigured]=useState({}),[llmMsg,setLlmMsg]=useState('');
+ const[brain,setBrain]=useState(null),[brainTab,setBrainTab]=useState('snapshot'),[brainMsg,setBrainMsg]=useState(''),[brainSearch,setBrainSearch]=useState(''),[brainResults,setBrainResults]=useState([]),[checkpoint,setCheckpoint]=useState({completed:'',decisions:'',pending:'',bugs:'',next_planning_item:'',notes:''});
 
-export default function Home() {
-  const [session, setSession] = useState(null);
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [authMsg, setAuthMsg] = useState('');
-  const [items, setItems] = useState([]);
-  const [summary, setSummary] = useState({ total:0, running:0, review:0, locked:0, errors:0 });
-  const [selectedId, setSelectedId] = useState(null);
-  const [detail, setDetail] = useState(null);
-  const [tab, setTab] = useState('claims');
-  const [loading, setLoading] = useState(false);
-  const [newTopic, setNewTopic] = useState('');
-  const [newPillar, setNewPillar] = useState('');
-  const [newPriority, setNewPriority] = useState(80);
-  const [llm, setLlm] = useState({provider:'anthropic',model:DEFAULT_MODELS.anthropic,base_url:'',temperature:0.2,max_tokens:2200});
-  const [llmConfigured, setLlmConfigured] = useState({});
-  const [llmMsg, setLlmMsg] = useState('');
+ useEffect(()=>{supabase.auth.getSession().then(({data})=>setSession(data.session));const{data:l}=supabase.auth.onAuthStateChange((_e,s)=>setSession(s));return()=>l.subscription.unsubscribe()},[]);
+ async function api(fn,body){const token=session?.access_token;if(!token)throw new Error('Not signed in');const r=await fetch(`${SUPABASE_URL}/functions/v1/${fn}`,{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${token}`,apikey:SUPABASE_KEY},body:JSON.stringify(body||{})});const j=await r.json();if(!r.ok)throw new Error(j.error||j.message||'Request failed');return j}
+ async function loadAll(){if(!session)return;setLoading(true);try{const d=await api('content-data',{mode:'LIST'});setItems(d.items||[]);setSummary(d.summary||{});if(selectedId&&(d.items||[]).some(x=>x.id===selectedId))await selectItem(selectedId)}finally{setLoading(false)}}
+ async function loadLlmSettings(){if(!session)return;try{const d=await api('llm-settings',{action:'GET'});if(d.settings)setLlm({provider:d.settings.provider,model:d.settings.model,base_url:d.settings.base_url||'',temperature:Number(d.settings.temperature??0.2),max_tokens:Number(d.settings.max_tokens??2200)});setLlmConfigured(d.configured||{})}catch(e){setLlmMsg(e.message)}}
+ async function loadBrain(){if(!session)return;setBrainMsg('Loading Project Brain…');try{const [ctx,data]=await Promise.all([api('project-context',{mode:'BOOTSTRAP'}),api('project-brain-data',{action:'OVERVIEW'})]);setBrain({...data,context:ctx.context,contextSummary:ctx.summary});setBrainMsg('Project Brain loaded manually. No auto-refresh.') }catch(e){setBrainMsg(e.message)}}
+ useEffect(()=>{if(!session)return;loadAll();loadLlmSettings();loadBrain()},[session]);
 
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => setSession(data.session));
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, next) => setSession(next));
-    return () => listener.subscription.unsubscribe();
-  }, []);
+ async function saveLlmSettings(){setLlmMsg('Saving...');try{const d=await api('llm-settings',{action:'SAVE',...llm});setLlm(d.settings);setLlmMsg('LLM preference saved.');await loadLlmSettings()}catch(e){setLlmMsg(e.message)}}
+ function changeProvider(provider){setLlm(x=>({...x,provider,model:DEFAULT_MODELS[provider]||'',base_url:provider==='openai_compatible'?x.base_url:''}));setLlmMsg('')}
+ async function signIn(){setAuthMsg('');const{error}=await supabase.auth.signInWithPassword({email,password});if(error)setAuthMsg(error.message)}
+ async function signUp(){setAuthMsg('');if(password.length<6)return setAuthMsg('Password must be at least 6 characters.');const{data,error}=await supabase.auth.signUp({email,password});if(error)setAuthMsg(error.message);else if(!data.session)setAuthMsg('Account created. Confirm your email, then sign in.')}
+ async function signOut(){await supabase.auth.signOut();setItems([]);setDetail(null);setSelectedId(null);setBrain(null)}
+ async function createContent(){if(!newTopic.trim())return;const d=await api('content-control',{action:'CREATE_CONTENT',topic:newTopic.trim(),content_pillar:newPillar.trim()||null,priority_score:Number(newPriority||0)});setNewTopic('');await loadAll();await selectItem(d.content.id)}
+ async function selectItem(id){setSelectedId(id);setDetail(await api('content-data',{mode:'DETAIL',id}))}
+ async function act(action){if(!selectedId)return;await api('content-control',{action,id:selectedId});await loadAll()}
+ async function searchBrain(){if(!brainSearch.trim())return setBrainResults([]);try{const d=await api('project-brain-data',{action:'SEARCH',query:brainSearch.trim()});setBrainResults(d.results||[]);setBrainTab('search')}catch(e){setBrainMsg(e.message)}}
+ async function createCheckpoint(){setBrainMsg('Creating checkpoint…');try{const d=await api('project-checkpoint',{action:'CREATE',completed:lines(checkpoint.completed),decisions:lines(checkpoint.decisions),pending:lines(checkpoint.pending),bugs:lines(checkpoint.bugs),next_planning_item:checkpoint.next_planning_item,notes:checkpoint.notes});setCheckpoint({completed:'',decisions:'',pending:'',bugs:'',next_planning_item:'',notes:''});setBrainMsg(`Checkpoint ${d.checkpoint.checkpoint_key} created.`);await loadBrain();setBrainTab('checkpoints')}catch(e){setBrainMsg(e.message)}}
+ const activeTabData=useMemo(()=>detail?.[tab]||[],[detail,tab]);
+ if(!session)return <main className="authWrap"><section className="authCard"><h1>Content Control Center</h1><p>Phase-1 · Evidence-backed content operations</p><label>Email<input value={email} onChange={e=>setEmail(e.target.value)} type="email"/></label><label>Password<input value={password} onChange={e=>setPassword(e.target.value)} type="password"/></label><button className="primary" onClick={signIn}>Sign in</button><button className="secondary" onClick={signUp}>Create account</button>{authMsg&&<div className="message">{authMsg}</div>}</section></main>;
+ const item=detail?.item;
+ const bt={rules:brain?.rules||[],decisions:brain?.decisions||[],tasks:brain?.tasks||[],approvals:brain?.approvals||[],bugs:brain?.bugs||[],history:brain?.changes||[],checkpoints:brain?.checkpoints||[],search:brainResults};
+ return <main><header className="top"><div className="brand">Content Control Center <span>Phase-1 V1</span></div><div className="topRight"><span>{session.user.email}</span><button onClick={()=>{loadAll();loadLlmSettings();}}>Refresh Content</button><button onClick={signOut}>Sign out</button></div></header><div className="wrap"><div className="statusbar">{loading?'Refreshing…':'Connected to Supabase backend · Auto-refresh OFF'}</div>
 
-  async function api(fn, body) {
-    const token = session?.access_token;
-    if (!token) throw new Error('Not signed in');
-    const r = await fetch(`${SUPABASE_URL}/functions/v1/${fn}`, {
-      method: 'POST',
-      headers: { 'Content-Type':'application/json', Authorization:`Bearer ${token}`, apikey:SUPABASE_KEY },
-      body: JSON.stringify(body || {})
-    });
-    const j = await r.json();
-    if (!r.ok) throw new Error(j.error || 'Request failed');
-    return j;
-  }
+ <section className="card brainCard"><div className="brainHead"><div><h3>Project Brain</h3><p>Persistent project memory · manual/on-demand loading only</p></div><button className="primary" onClick={loadBrain}>Reload Project Brain</button></div>{brainMsg&&<div className="brainMsg">{brainMsg}</div>}
+ <div className="brainStats">{[['Rules',brain?.summary?.rules],['Decisions',brain?.summary?.decisions],['Tasks',brain?.summary?.tasks],['Approvals',brain?.summary?.approvals],['Bugs',brain?.summary?.bugs],['Changes',brain?.summary?.changes],['Checkpoints',brain?.summary?.checkpoints]].map(([k,v])=><div key={k}><b>{v??0}</b><span>{k}</span></div>)}</div>
+ <div className="brainSearch"><input placeholder="Search Project Brain memory…" value={brainSearch} onChange={e=>setBrainSearch(e.target.value)} onKeyDown={e=>e.key==='Enter'&&searchBrain()}/><button onClick={searchBrain}>Search</button></div>
+ <div className="brainTabs">{['snapshot','rules','decisions','tasks','approvals','bugs','history','checkpoints','search'].map(t=><button key={t} className={brainTab===t?'active':''} onClick={()=>setBrainTab(t)}>{t[0].toUpperCase()+t.slice(1)}</button>)}</div>
+ <div className="brainBody">{brainTab==='snapshot'?<pre className="brainSnapshot">{brain?.contextSummary||'Load Project Brain to view the current bootstrap snapshot.'}</pre>:brainTab==='checkpoints'?<><div className="checkpointGrid"><label>Completed (one per line)<textarea value={checkpoint.completed} onChange={e=>setCheckpoint(x=>({...x,completed:e.target.value}))}/></label><label>Decisions (one per line)<textarea value={checkpoint.decisions} onChange={e=>setCheckpoint(x=>({...x,decisions:e.target.value}))}/></label><label>Pending (one per line)<textarea value={checkpoint.pending} onChange={e=>setCheckpoint(x=>({...x,pending:e.target.value}))}/></label><label>Bugs (one per line)<textarea value={checkpoint.bugs} onChange={e=>setCheckpoint(x=>({...x,bugs:e.target.value}))}/></label><label>Next planning item<input value={checkpoint.next_planning_item} onChange={e=>setCheckpoint(x=>({...x,next_planning_item:e.target.value}))}/></label><label>Notes<textarea value={checkpoint.notes} onChange={e=>setCheckpoint(x=>({...x,notes:e.target.value}))}/></label></div><button className="primary checkpointBtn" onClick={createCheckpoint}>Create Session Checkpoint</button><div className="brainList">{(brain?.checkpoints||[]).map(x=><div className="brainRow" key={x.id}><div><b>{x.checkpoint_key}</b><small>Version {x.version} · {new Date(x.created_at).toLocaleString()}</small></div><Pill value={x.status}/><pre>{JSON.stringify(x.summary,null,2)}</pre></div>)}</div></>:<div className="brainList">{(bt[brainTab]||[]).length?(bt[brainTab]||[]).map((x,i)=><div className="brainRow" key={x.id||i}><div><b>{x.title||x.task_key||x.decision_key||x.rule_key||x.bug_key||x.change_key||x.entity_type||x.checkpoint_key||x.type||'Memory record'}</b><small>{x.status||x.lifecycle_status||x.approval_status||x.action||x.type||''}</small></div>{(x.status||x.lifecycle_status||x.approval_status)&&<Pill value={x.status||x.lifecycle_status||x.approval_status}/>}<p>{x.body||x.decision_text||x.description||x.problem||x.summary||x.note||x.result||''}</p></div>):<div className="empty">No records.</div>}</div>}</div></section>
 
-  async function loadAll() {
-    if (!session) return;
-    setLoading(true);
-    try {
-      const d = await api('content-data', { mode:'LIST' });
-      setItems(d.items || []); setSummary(d.summary || {});
-      if (selectedId && (d.items || []).some(x => x.id === selectedId)) await selectItem(selectedId);
-    } finally { setLoading(false); }
-  }
-
-  async function loadLlmSettings(){
-    if(!session) return;
-    try{
-      const d=await api('llm-settings',{action:'GET'});
-      if(d.settings) setLlm({provider:d.settings.provider,model:d.settings.model,base_url:d.settings.base_url||'',temperature:Number(d.settings.temperature??0.2),max_tokens:Number(d.settings.max_tokens??2200)});
-      setLlmConfigured(d.configured||{});
-    }catch(e){setLlmMsg(e.message);}
-  }
-
-  useEffect(() => {
-    if (!session) return;
-    loadAll();
-    loadLlmSettings();
-  }, [session]);
-
-  async function saveLlmSettings(){
-    setLlmMsg('Saving...');
-    try{
-      const d=await api('llm-settings',{action:'SAVE',...llm});
-      setLlm(d.settings);
-      setLlmMsg('LLM preference saved. New agent runs will use this provider/model.');
-      await loadLlmSettings();
-    }catch(e){setLlmMsg(e.message);}
-  }
-
-  function changeProvider(provider){
-    setLlm(x=>({...x,provider,model:DEFAULT_MODELS[provider]||'',base_url:provider==='openai_compatible'?x.base_url:''}));
-    setLlmMsg('');
-  }
-
-  async function signIn() { setAuthMsg(''); const { error } = await supabase.auth.signInWithPassword({ email, password }); if (error) setAuthMsg(error.message); }
-  async function signUp() { setAuthMsg(''); if (password.length < 6) return setAuthMsg('Password must be at least 6 characters.'); const { data, error } = await supabase.auth.signUp({ email, password }); if (error) setAuthMsg(error.message); else if (!data.session) setAuthMsg('Account created. Confirm your email, then sign in.'); }
-  async function signOut() { await supabase.auth.signOut(); setItems([]); setDetail(null); setSelectedId(null); }
-
-  async function createContent() { if (!newTopic.trim()) return; const d = await api('content-control', { action:'CREATE_CONTENT', topic:newTopic.trim(), content_pillar:newPillar.trim()||null, priority_score:Number(newPriority||0) }); setNewTopic(''); await loadAll(); await selectItem(d.content.id); }
-  async function selectItem(id) { setSelectedId(id); setDetail(await api('content-data',{mode:'DETAIL',id})); }
-  async function act(action) { if (!selectedId) return; await api('content-control',{action,id:selectedId}); await loadAll(); }
-
-  const activeTabData = useMemo(() => detail?.[tab] || [], [detail, tab]);
-
-  if (!session) return <main className="authWrap"><section className="authCard"><h1>Content Control Center</h1><p>Phase-1 · Evidence-backed content operations</p><label>Email<input value={email} onChange={e=>setEmail(e.target.value)} type="email"/></label><label>Password<input value={password} onChange={e=>setPassword(e.target.value)} type="password"/></label><button className="primary" onClick={signIn}>Sign in</button><button className="secondary" onClick={signUp}>Create account</button>{authMsg && <div className="message">{authMsg}</div>}</section></main>;
-
-  const item = detail?.item;
-  return <main>
-    <header className="top"><div className="brand">Content Control Center <span>Phase-1 V1</span></div><div className="topRight"><span>{session.user.email}</span><button onClick={()=>{loadAll();loadLlmSettings();}}>Refresh</button><button onClick={signOut}>Sign out</button></div></header>
-    <div className="wrap"><div className="statusbar">{loading ? 'Refreshing…' : 'Connected to Supabase backend · Auto-refresh OFF'}</div>
-
-    <section className="card llmCard">
-      <div className="llmHead"><div><h3>AI Model Control</h3><p>Choose which LLM the content agents should use. API keys stay server-side.</p></div><div className={`providerState ${llmConfigured[llm.provider]?'ready':'missing'}`}>{llmConfigured[llm.provider]?'API key configured':'API key not configured'}</div></div>
-      <div className="llmGrid">
-        <label>Provider<select value={llm.provider} onChange={e=>changeProvider(e.target.value)}>{Object.entries(PROVIDER_LABELS).map(([v,l])=><option key={v} value={v}>{l}</option>)}</select></label>
-        <label>Model<input value={llm.model||''} onChange={e=>setLlm(x=>({...x,model:e.target.value}))} placeholder="Provider model ID"/></label>
-        {llm.provider==='openai_compatible' && <label>Base URL<input value={llm.base_url||''} onChange={e=>setLlm(x=>({...x,base_url:e.target.value}))} placeholder="https://your-provider.example/v1"/></label>}
-        <label>Temperature<input type="number" step="0.1" min="0" max="2" value={llm.temperature} onChange={e=>setLlm(x=>({...x,temperature:Number(e.target.value)}))}/></label>
-        <label>Max tokens<input type="number" min="256" max="16000" value={llm.max_tokens} onChange={e=>setLlm(x=>({...x,max_tokens:Number(e.target.value)}))}/></label>
-        <button className="primary llmSave" onClick={saveLlmSettings}>Save LLM</button>
-      </div>
-      {llmMsg && <div className="llmMsg">{llmMsg}</div>}
-      <div className="providerLegend">{Object.entries(PROVIDER_LABELS).map(([p,l])=><span key={p} className={llmConfigured[p]?'providerOk':'providerNo'}>{l}: {llmConfigured[p]?'configured':'needs key'}</span>)}</div>
-    </section>
-
-    <section className="summary">{[['Total',summary.total],['Running',summary.running],['Review',summary.review],['Locked',summary.locked],['Errors',summary.errors]].map(([k,v])=><div className="card" key={k}><div className="metric">{v??0}</div><div className="metricLabel">{k}</div></div>)}</section>
-    <section className="card create"><h3>New Content</h3><div className="newbox"><input placeholder="Topic, e.g. Type 2 Diabetes" value={newTopic} onChange={e=>setNewTopic(e.target.value)}/><input placeholder="Content pillar (optional)" value={newPillar} onChange={e=>setNewPillar(e.target.value)}/><input type="number" min="0" max="100" value={newPriority} onChange={e=>setNewPriority(e.target.value)}/><button className="primary" onClick={createContent}>+ Create</button></div></section>
-    <section className="layout"><div className="panel"><div className="panelHead"><h2>Pipeline Board</h2></div><div className="tableWrap"><table><thead><tr><th>ID</th><th>Topic</th><th>Stage</th><th>Agent</th><th>Evidence</th><th>Safety</th><th>Content</th><th>Status</th></tr></thead><tbody>{items.length?items.map(x=><tr key={x.id} onClick={()=>selectItem(x.id)} className={selectedId===x.id?'selectedRow':''}><td><b>{x.content_id}</b></td><td>{x.topic}</td><td>{x.current_stage}</td><td>{x.current_agent||'—'}</td><td>{x.evidence_score??'—'}</td><td>{x.safety_score??'—'}</td><td>{x.overall_content_score??'—'}</td><td><Pill value={x.overall_status}/></td></tr>):<tr><td colSpan="8" className="empty">No content yet.</td></tr>}</tbody></table></div></div>
-    <div className="panel"><div className="panelHead"><h2>Content Detail</h2><span>{item?.content_id||''}</span></div>{!item?<div className="empty">Select a content item.</div>:<><div className="detail"><h3>{item.topic}</h3><Pill value={item.overall_status}/><div className="kv"><span>Stage</span><b>{item.current_stage}</b><span>Agent</span><b>{item.current_agent||'—'}</b><span>Evidence gate</span><Pill value={item.evidence_gate}/><span>Safety gate</span><Pill value={item.safety_gate}/><span>Content QA</span><Pill value={item.content_qa_gate}/><span>Human review</span><Pill value={item.human_medical_review}/><span>Content lock</span><Pill value={item.content_lock}/></div><div className="actions"><button className="primary" onClick={()=>act('RUN_CONTENT_ENGINE')}>▶ Run</button><button onClick={()=>act('HOLD')}>⏸ Hold</button><button onClick={()=>act('RESEARCH_AGAIN')}>↻ Research Again</button><button onClick={()=>act('REVISE')}>✎ Revise</button><button onClick={()=>act('APPROVE_CONTENT')}>✓ Approve</button><button className="danger" onClick={()=>act('REJECT_CONTENT')}>Reject</button><button onClick={()=>act('LOCK_CONTENT')}>🔒 Lock</button></div></div><div className="tabs">{['claims','sources','scripts','runs'].map(t=><button key={t} onClick={()=>setTab(t)} className={tab===t?'active':''}>{t[0].toUpperCase()+t.slice(1)}</button>)}</div><div className="tabbody">{activeTabData.length?activeTabData.map((x,i)=><div className="claim" key={x.id||i}><div className="claimTitle">{tab==='claims'?`${x.claim_id} · ${x.claim_text_master}`:tab==='sources'?x.title:tab==='scripts'?`${x.language} · Version ${x.version}`:`${x.mode} · ${x.status}`}</div><div className="claimMeta">{tab==='claims'?`Evidence: ${x.evidence_level} · Risk: ${x.risk_level} · ${x.allowed_in_script?'Allowed':'Blocked'}`:tab==='sources'?`${x.publisher||''} · ${x.source_type} · ${x.evidence_strength}`:tab==='scripts'?x.status:`Node: ${x.current_node||'—'}`}</div></div>):<div className="empty">No {tab} yet.</div>}</div></>}</div></section></div>
-  </main>;
+ <section className="card llmCard"><div className="llmHead"><div><h3>AI Model Control</h3><p>Choose which LLM the content agents should use. API keys stay server-side.</p></div><div className={`providerState ${llmConfigured[llm.provider]?'ready':'missing'}`}>{llmConfigured[llm.provider]?'API key configured':'API key not configured'}</div></div><div className="llmGrid"><label>Provider<select value={llm.provider} onChange={e=>changeProvider(e.target.value)}>{Object.entries(PROVIDER_LABELS).map(([v,l])=><option key={v} value={v}>{l}</option>)}</select></label><label>Model<input value={llm.model||''} onChange={e=>setLlm(x=>({...x,model:e.target.value}))}/></label>{llm.provider==='openai_compatible'&&<label>Base URL<input value={llm.base_url||''} onChange={e=>setLlm(x=>({...x,base_url:e.target.value}))}/></label>}<label>Temperature<input type="number" step="0.1" min="0" max="2" value={llm.temperature} onChange={e=>setLlm(x=>({...x,temperature:Number(e.target.value)}))}/></label><label>Max tokens<input type="number" min="256" max="16000" value={llm.max_tokens} onChange={e=>setLlm(x=>({...x,max_tokens:Number(e.target.value)}))}/></label><button className="primary llmSave" onClick={saveLlmSettings}>Save LLM</button></div>{llmMsg&&<div className="llmMsg">{llmMsg}</div>}</section>
+ <section className="summary">{[['Total',summary.total],['Running',summary.running],['Review',summary.review],['Locked',summary.locked],['Errors',summary.errors]].map(([k,v])=><div className="card" key={k}><div className="metric">{v??0}</div><div className="metricLabel">{k}</div></div>)}</section>
+ <section className="card create"><h3>New Content</h3><div className="newbox"><input placeholder="Topic, e.g. Type 2 Diabetes" value={newTopic} onChange={e=>setNewTopic(e.target.value)}/><input placeholder="Content pillar (optional)" value={newPillar} onChange={e=>setNewPillar(e.target.value)}/><input type="number" min="0" max="100" value={newPriority} onChange={e=>setNewPriority(e.target.value)}/><button className="primary" onClick={createContent}>+ Create</button></div></section>
+ <section className="layout"><div className="panel"><div className="panelHead"><h2>Pipeline Board</h2></div><div className="tableWrap"><table><thead><tr><th>ID</th><th>Topic</th><th>Stage</th><th>Agent</th><th>Evidence</th><th>Safety</th><th>Content</th><th>Status</th></tr></thead><tbody>{items.length?items.map(x=><tr key={x.id} onClick={()=>selectItem(x.id)} className={selectedId===x.id?'selectedRow':''}><td><b>{x.content_id}</b></td><td>{x.topic}</td><td>{x.current_stage}</td><td>{x.current_agent||'—'}</td><td>{x.evidence_score??'—'}</td><td>{x.safety_score??'—'}</td><td>{x.overall_content_score??'—'}</td><td><Pill value={x.overall_status}/></td></tr>):<tr><td colSpan="8" className="empty">No content yet.</td></tr>}</tbody></table></div></div><div className="panel"><div className="panelHead"><h2>Content Detail</h2><span>{item?.content_id||''}</span></div>{!item?<div className="empty">Select a content item.</div>:<><div className="detail"><h3>{item.topic}</h3><Pill value={item.overall_status}/><div className="kv"><span>Stage</span><b>{item.current_stage}</b><span>Agent</span><b>{item.current_agent||'—'}</b><span>Evidence gate</span><Pill value={item.evidence_gate}/><span>Safety gate</span><Pill value={item.safety_gate}/><span>Content QA</span><Pill value={item.content_qa_gate}/><span>Human review</span><Pill value={item.human_medical_review}/><span>Content lock</span><Pill value={item.content_lock}/></div><div className="actions"><button className="primary" onClick={()=>act('RUN_CONTENT_ENGINE')}>▶ Run</button><button onClick={()=>act('HOLD')}>⏸ Hold</button><button onClick={()=>act('RESEARCH_AGAIN')}>↻ Research Again</button><button onClick={()=>act('REVISE')}>✎ Revise</button><button onClick={()=>act('APPROVE_CONTENT')}>✓ Approve</button><button className="danger" onClick={()=>act('REJECT_CONTENT')}>Reject</button><button onClick={()=>act('LOCK_CONTENT')}>🔒 Lock</button></div></div><div className="tabs">{['claims','sources','scripts','runs'].map(t=><button key={t} onClick={()=>setTab(t)} className={tab===t?'active':''}>{t[0].toUpperCase()+t.slice(1)}</button>)}</div><div className="tabbody">{activeTabData.length?activeTabData.map((x,i)=><div className="claim" key={x.id||i}><div className="claimTitle">{tab==='claims'?`${x.claim_id} · ${x.claim_text_master}`:tab==='sources'?x.title:tab==='scripts'?`${x.language} · Version ${x.version}`:`${x.mode} · ${x.status}`}</div><div className="claimMeta">{tab==='claims'?`Evidence: ${x.evidence_level} · Risk: ${x.risk_level} · ${x.allowed_in_script?'Allowed':'Blocked'}`:tab==='sources'?`${x.publisher||''} · ${x.source_type} · ${x.evidence_strength}`:tab==='scripts'?x.status:`Node: ${x.current_node||'—'}`}</div></div>):<div className="empty">No {tab} yet.</div>}</div></>}</div></section></div></main>;
 }
