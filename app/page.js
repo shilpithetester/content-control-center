@@ -23,7 +23,7 @@ export default function Home(){
  async function loadAll(){if(!session)return;setLoading(true);try{const d=await api('content-data',{mode:'LIST'});setItems(d.items||[]);setSummary(d.summary||{});if(selectedId&&(d.items||[]).some(x=>x.id===selectedId))await selectItem(selectedId)}finally{setLoading(false)}}
  async function loadLlmSettings(){if(!session)return;try{const d=await api('llm-settings',{action:'GET'});if(d.settings)setLlm({provider:d.settings.provider,model:d.settings.model,base_url:d.settings.base_url||'',temperature:Number(d.settings.temperature??0.2),max_tokens:Number(d.settings.max_tokens??2200)});setLlmConfigured(d.configured||{})}catch(e){setLlmMsg(e.message)}}
  async function loadBrain(){if(!session)return;setBrainMsg('Loading Project Brain…');try{const [ctx,data]=await Promise.all([api('project-context',{mode:'BOOTSTRAP'}),api('project-brain-data',{action:'OVERVIEW'})]);setBrain({...data,context:ctx.context,contextSummary:ctx.summary});setBrainMsg('Project Brain loaded manually. No auto-refresh.') }catch(e){setBrainMsg(e.message)}}
- useEffect(()=>{if(!session)return;loadAll();loadLlmSettings();loadBrain()},[session]);
+ useEffect(()=>{if(!session)return;loadAll();loadLlmSettings()},[session]);
 
  async function saveLlmSettings(){setLlmMsg('Saving...');try{const d=await api('llm-settings',{action:'SAVE',...llm});setLlm(d.settings);setLlmMsg('LLM preference saved.');await loadLlmSettings()}catch(e){setLlmMsg(e.message)}}
  function changeProvider(provider){setLlm(x=>({...x,provider,model:DEFAULT_MODELS[provider]||'',base_url:provider==='openai_compatible'?x.base_url:''}));setLlmMsg('')}
