@@ -1,0 +1,45 @@
+import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { createClient } from "jsr:@supabase/supabase-js@2";
+const H={"Content-Type":"application/json","Access-Control-Allow-Origin":"*","Access-Control-Allow-Headers":"authorization, x-client-info, apikey, content-type"};
+function j(x:any,s=200){return new Response(JSON.stringify(x),{status:s,headers:H});}
+function parseJson(text:string){const t=text.trim().replace(/^```json\s*/i,'').replace(/^```/,'').replace(/```$/,'').trim();return JSON.parse(t);}
+async function callLLM(cfg:any,system:string,user:string){
+ const p=cfg.provider, model=cfg.model, temperature=Number(cfg.temperature??0.2), max_tokens=Number(cfg.max_tokens??2200);
+ if(p==='anthropic'){
+  const key=Deno.env.get('ANTHROPIC_API_KEY'); if(!key) throw new Error('ANTHROPIC_API_KEY is not configured');
+  const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'content-type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01'},body:JSON.stringify({model,max_tokens,temperature,system,messages:[{role:'user',content:user}]})}); const d=await r.json(); if(!r.ok) throw new Error(d?.error?.message||`Anthropic failed (${r.status})`); return (d.content||[]).filter((x:any)=>x.type==='text').map((x:any)=>x.text).join('\n');
+ }
+ if(p==='openai' || p==='openrouter' || p==='openai_compatible'){
+  const key=p==='openai'?Deno.env.get('OPENAI_API_KEY'):p==='openrouter'?Deno.env.get('OPENROUTER_API_KEY'):Deno.env.get('CUSTOM_LLM_API_KEY');
+  if(!key) throw new Error(`${p.toUpperCase()} API key is not configured`);
+  const base=p==='openai'?'https://api.openai.com/v1':p==='openrouter'?'https://openrouter.ai/api/v1':String(cfg.base_url||'').replace(/\/$/,'');
+  if(!base) throw new Error('Base URL is required');
+  const r=await fetch(`${base}/chat/completions`,{method:'POST',headers:{'content-type':'application/json','authorization':`Bearer ${key}`},body:JSON.stringify({model,temperature,max_tokens,messages:[{role:'system',content:system},{role:'user',content:user}]})}); const d=await r.json(); if(!r.ok) throw new Error(d?.error?.message||`${p} failed (${r.status})`); return d?.choices?.[0]?.message?.content||'';
+ }
+ if(p==='gemini'){
+  const key=Deno.env.get('GEMINI_API_KEY'); if(!key) throw new Error('GEMINI_API_KEY is not configured');
+  const r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(key)}`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({systemInstruction:{parts:[{text:system}]},contents:[{role:'user',parts:[{text:user}]}],generationConfig:{temperature,maxOutputTokens:max_tokens,responseMimeType:'application/json'}})}); const d=await r.json(); if(!r.ok) throw new Error(d?.error?.message||`Gemini failed (${r.status})`); return (d?.candidates?.[0]?.content?.parts||[]).map((x:any)=>x.text||'').join('\n');
+ }
+ throw new Error(`Unsupported provider: ${p}`);
+}
+Deno.serve(async(req:Request)=>{
+ if(req.method==='OPTIONS') return new Response('ok',{headers:H}); if(req.method!=='POST') return j({error:'POST required'},405);
+ const admin=createClient(Deno.env.get('SUPABASE_URL')!,Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!); const token=(req.headers.get('Authorization')||'').replace(/^Bearer\s+/i,''); const {data:u,error:ue}=await admin.auth.getUser(token); if(ue||!u.user)return j({error:'Unauthorized'},401); const uid=u.user.id;
+ const body=await req.json().catch(()=>({})); const contentId=String(body.id||body.content_id||''); if(!contentId)return j({error:'id required'},400);
+ const {data:item}=await admin.from('content_items').select('*').eq('id',contentId).eq('owner_id',uid).single(); if(!item)return j({error:'Content item not found'},404); if(item.hold)return j({error:'Content is on HOLD'},409);
+ let {data:cfg}=await admin.from('llm_settings').select('*').eq('owner_id',uid).maybeSingle(); if(!cfg){const ins=await admin.from('llm_settings').insert({owner_id:uid}).select().single(); cfg=ins.data;}
+ const {data:run,error:re}=await admin.from('workflow_runs').insert({owner_id:uid,content_item_id:contentId,mode:'NEW_TOPIC',status:'RUNNING',started_at:new Date().toISOString(),current_node:'N01'}).select().single(); if(re)return j({error:re.message},400);
+ await admin.from('content_items').update({overall_status:'RUNNING',current_stage:'CONTENT_DIRECTOR',current_agent:'AGENT_00_CONTENT_DIRECTOR',last_error:null}).eq('id',contentId);
+ const {data:a0}=await admin.from('agent_executions').insert({owner_id:uid,content_item_id:contentId,workflow_run_id:run.id,agent_code:'AGENT_00',agent_name:'Content Director',status:'RUNNING',started_at:new Date().toISOString(),input:{topic:item.topic,llm:{provider:cfg.provider,model:cfg.model}}}).select().single();
+ const director={decision:'PROCEED',next_agent:'AGENT_01_TOPIC_INTELLIGENCE',llm_provider:cfg.provider,llm_model:cfg.model,guardrails:['No treatment claims at topic stage','Flag medical risk','Prepare research questions instead of inventing evidence']};
+ await admin.from('agent_executions').update({status:'COMPLETED',output:director,model:`${cfg.provider}:${cfg.model}`,finished_at:new Date().toISOString()}).eq('id',a0.id);
+ await admin.from('workflow_runs').update({current_node:'N02'}).eq('id',run.id); await admin.from('content_items').update({current_stage:'TOPIC_INTELLIGENCE',current_agent:'AGENT_01_TOPIC_INTELLIGENCE'}).eq('id',contentId);
+ const {data:a1}=await admin.from('agent_executions').insert({owner_id:uid,content_item_id:contentId,workflow_run_id:run.id,agent_code:'AGENT_01',agent_name:'Topic Intelligence',status:'RUNNING',started_at:new Date().toISOString(),input:{topic:item.topic,content_pillar:item.content_pillar,llm:{provider:cfg.provider,model:cfg.model}}}).select().single();
+ const system='You are Agent 01 — Topic Intelligence for an evidence-first integrative-health YouTube content system. Do not provide diagnosis, treatment, dosage, cure claims, or evidence claims. Convert the topic into a research-ready brief. Output strict JSON only. Do not fabricate statistics.';
+ const prompt=`Topic: ${item.topic}\nContent pillar: ${item.content_pillar||'Not specified'}\nPriority: ${item.priority_score}\nReturn JSON: {"topic_summary":"...","audience_problem":"...","why_now":"...","content_angles":["..."],"research_questions":["..."],"search_queries":["..."],"medical_risk_level":"LOW|MEDIUM|HIGH","differentiation_notes":"...","recommended_next_step":"SPECIALIST_RESEARCH"}. Requirements: 4-7 angles, 8-12 research questions, 8-12 search queries. Favor guidelines, systematic reviews, major medical organizations, nutrition, exercise/yoga, and safety/contraindications. Do not claim an intervention works before downstream evidence verification.`;
+ try{
+  const text=await callLLM(cfg,system,prompt); const brief=parseJson(text); const {data:last}=await admin.from('topic_briefs').select('version').eq('content_item_id',contentId).order('version',{ascending:false}).limit(1); const version=(last?.[0]?.version||0)+1;
+  await admin.from('topic_briefs').insert({owner_id:uid,content_item_id:contentId,workflow_run_id:run.id,version,topic_summary:brief.topic_summary||null,audience_problem:brief.audience_problem||null,why_now:brief.why_now||null,content_angles:brief.content_angles||[],research_questions:brief.research_questions||[],search_queries:brief.search_queries||[],medical_risk_level:brief.medical_risk_level||null,differentiation_notes:brief.differentiation_notes||null,recommended_next_step:brief.recommended_next_step||'SPECIALIST_RESEARCH',raw_output:{...brief,llm_provider:cfg.provider,llm_model:cfg.model}});
+  await admin.from('agent_executions').update({status:'COMPLETED',output:brief,model:`${cfg.provider}:${cfg.model}`,finished_at:new Date().toISOString()}).eq('id',a1.id); await admin.from('workflow_runs').update({status:'COMPLETED',current_node:'N02_DONE',finished_at:new Date().toISOString()}).eq('id',run.id); await admin.from('content_items').update({overall_status:'NEEDS_RESEARCH',current_stage:'RESEARCH_ROUTER',current_agent:'AGENT_00_CONTENT_DIRECTOR',last_error:null}).eq('id',contentId); return j({ok:true,provider:cfg.provider,model:cfg.model,run_id:run.id,topic_brief:brief,next_stage:'RESEARCH_ROUTER'});
+ }catch(e){const err=e instanceof Error?e.message:String(e); await admin.from('agent_executions').update({status:'FAILED',error_message:err,model:`${cfg.provider}:${cfg.model}`,finished_at:new Date().toISOString()}).eq('id',a1.id); await admin.from('workflow_runs').update({status:'ERROR',last_error:err,finished_at:new Date().toISOString()}).eq('id',run.id); await admin.from('content_items').update({overall_status:'ERROR',last_error:err}).eq('id',contentId); return j({error:err,provider:cfg.provider,model:cfg.model,run_id:run.id},500);}
+});
