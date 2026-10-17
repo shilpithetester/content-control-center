@@ -7,8 +7,8 @@ const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SUPABASE_KEY = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-const PROVIDER_LABELS={anthropic:'Anthropic Claude',openai:'OpenAI',gemini:'Google Gemini',openrouter:'OpenRouter',openai_compatible:'Custom OpenAI-compatible'};
-const DEFAULT_MODELS={anthropic:'claude-sonnet-4-20250514',openai:'gpt-4o-mini',gemini:'gemini-2.0-flash',openrouter:'openai/gpt-4o-mini',openai_compatible:''};
+const PROVIDER_LABELS={anthropic:'Anthropic Claude',deepseek:'DeepSeek',openai:'OpenAI',gemini:'Google Gemini',openrouter:'OpenRouter',openai_compatible:'Custom OpenAI-compatible'};
+const DEFAULT_MODELS={anthropic:'claude-sonnet-4-20250514',deepseek:'deepseek-flash',openai:'gpt-4o-mini',gemini:'gemini-2.0-flash',openrouter:'openai/gpt-4o-mini',openai_compatible:''};
 function Pill({value}){const v=value||'—';const cls=['CONTENT_LOCKED','APPROVED','PASS','ACTIVE','COMPLETED'].includes(v)?'pill green':['ERROR','REJECTED','FAIL','BLOCKED'].includes(v)?'pill red':v==='RUNNING'?'pill blue':['NEEDS_RESEARCH','NEEDS_REVISION','NEEDS_HUMAN_REVIEW','HOLD','PENDING','PLANNING','PENDING_APPROVAL'].includes(v)?'pill yellow':'pill';return <span className={cls}>{v}</span>}
 function lines(s){return String(s||'').split('\n').map(x=>x.trim()).filter(Boolean)}
 
