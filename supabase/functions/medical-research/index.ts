@@ -40,18 +40,6 @@ async function synthesize(apiKey: string, model: string, topic: string, question
   if (data.choices?.[0]?.finish_reason === "length") throw new Error("Medical research output truncated");
   return parseModel(String(data.choices?.[0]?.message?.content || ""));
 }
-function validate(raw: Record<string, unknown>, sources: Source[]) {
-  const ids = new Set(sources.map(s => s.source_id));
-  if (typeof raw.medical_summary !== "string" || !raw.medical_summary.trim()) throw new Error("Missing medical_summary");
-  if (!Array.isArray(raw.medical_claims)) throw new Error("Missing medical_claims");
-  const claims = raw.medical_claims.map((claim: Record<string, unknown>, index: number) => {
-    if (!claim || typeof claim.statement !== "string" || !claim.statement.trim()) throw new Error("Invalid claim " + index);
-    const references = asStrings(claim.source_ids);
-    if (references.some(ref => !ids.has(ref))) throw new Error("Claim references unknown source");
-    return { claim_id: "C" + (index + 1), statement: claim.statement, source_ids: references, evidence_strength: "UNKNOWN", verification_status: "UNVERIFIED", applicable_population: String(claim.applicable_population || ""), caveats: String(claim.caveats || ""), risk_flags: asStrings(claim.risk_flags) };
-  });
-  return { medical_summary: raw.medical_summary, medical_claims: claims, clinical_guidelines: [], contraindications: asStrings(raw.contraindications), drug_interactions_or_precautions: asStrings(raw.drug_interactions_or_precautions), vulnerable_populations: asStrings(raw.vulnerable_populations), red_flags: asStrings(raw.red_flags), evidence_gaps: asStrings(raw.evidence_gaps), research_confidence: "LOW" };
-}
 Deno.serve(async (request: Request) => {
   if (request.method === "OPTIONS") return new Response("ok", { headers });
   if (request.method !== "POST") return reply({ error: "POST required" }, 405);
@@ -66,7 +54,7 @@ Deno.serve(async (request: Request) => {
   if (!/^HT-[0-9]+$/.test(contentId) || !Number.isSafeInteger(version) || version < 1) return reply({ error: "Valid content_id and topic_brief_version required" }, 400);
   if (body.contract_version !== 1 || body.research_mode !== "EVIDENCE_FIRST") return reply({ error: "Unsupported contract or research mode" }, 400);
   const cutoff = String(body.evidence_cutoff_date || now().slice(0, 10));
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(cutoff) || Number.isNaN(Date.parse(cutoff))) return reply({ error: "Invalid cutoff date" }, 400);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(cutoff) || Number.isNaN(Date.parse(cutoff)) || cutoff > now().slice(0, 10)) return reply({ error: "Invalid cutoff date" }, 400);
   let limit: number;
   try { limit = validateSourceLimit(body.max_sources); } catch (error) { return reply({ error: String(error) }, 400); }
   const { data: item } = await admin.from("content_items").select("id,content_id,topic,hold").eq("content_id", contentId).eq("owner_id", owner).maybeSingle();
@@ -84,8 +72,11 @@ Deno.serve(async (request: Request) => {
   if (executionError) return reply({ error: "Execution log creation failed: " + executionError.message }, 500);
   try {
     const unique = new Map<string, Source>();
+    const retrievalFailures: string[] = [];
     for (const query of queries.slice(0, 3)) {
-      const found = await pubmedSearch(query, Math.min(5, limit), cutoff);
+      let found: Source[];
+      try { found = await pubmedSearch(query, Math.min(5, limit), cutoff); }
+      catch (error) { retrievalFailures.push(String(error)); continue; }
       for (const source of found) { if (unique.size < limit) unique.set(source.source_id, source); }
       if (unique.size >= limit) break;
     }
@@ -93,7 +84,7 @@ Deno.serve(async (request: Request) => {
     if (!sources.length) throw new Error("No retrievable PubMed sources. Research cannot be evidence verified.");
     const raw = await synthesize(key, String(cfg.model || "deepseek-chat"), String(item.topic), questions, sources);
     const clean = validateClaims(raw, sources);
-    const dossier = { contract_version: 1, content_id: contentId, topic_brief_version: version, evidence_cutoff_date: cutoff, medical_summary: clean.medical_summary, evidence_sources: sources, medical_claims: clean.medical_claims, clinical_guidelines: clean.clinical_guidelines, contraindications: clean.contraindications, drug_interactions_or_precautions: clean.drug_interactions_or_precautions, vulnerable_populations: clean.vulnerable_populations, red_flags: clean.red_flags, evidence_gaps: clean.evidence_gaps, research_confidence: "LOW", research_status: "NEEDS_SOURCE_VERIFICATION", requires_medical_review: true, recommended_next_step: "INTEGRATIVE_ANALYSIS", agent03_handoff_allowed: false };
+    const dossier = { contract_version: 1, content_id: contentId, topic_brief_version: version, evidence_cutoff_date: cutoff, medical_summary: clean.medical_summary, evidence_sources: sources, medical_claims: clean.medical_claims, clinical_guidelines: clean.clinical_guidelines, contraindications: clean.contraindications, drug_interactions_or_precautions: clean.drug_interactions_or_precautions, vulnerable_populations: clean.vulnerable_populations, red_flags: clean.red_flags, evidence_gaps: [...clean.evidence_gaps, ...(retrievalFailures.length ? ["Some PubMed retrieval requests failed; source coverage may be incomplete."] : [])], research_confidence: "LOW", research_status: "NEEDS_SOURCE_VERIFICATION", requires_medical_review: true, recommended_next_step: "INTEGRATIVE_ANALYSIS", agent03_handoff_allowed: false };
     const { data: saved, error: saveError } = await admin.from("medical_research_dossiers").insert({ owner_id: owner, content_item_id: item.id, topic_brief_version: version, execution_id: execution.id, contract_version: 1, research_status: "NEEDS_SOURCE_VERIFICATION", dossier }).select("id,created_at").single();
     if (saveError) throw new Error("Dossier persistence failed: " + saveError.message);
     await admin.from("agent_executions").update({ status: "COMPLETED", finished_at: now(), model: "deepseek:" + cfg.model, output: { dossier_id: saved.id, research_status: dossier.research_status } }).eq("id", execution.id).eq("owner_id", owner);
