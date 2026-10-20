@@ -82,3 +82,12 @@
  .workspaceApp .top .brand{font-size:12px}
  .workspaceApp .top .topRight button{padding:8px 6px;font-size:11px}
 }
+
+
+/* Clear, touch-friendly navigation back to the content pipeline. */
+.workspaceLayout .panelHead{align-items:center;gap:12px}
+.workspaceLayout .panelHead .backToPipeline{display:inline-flex;align-items:center;justify-content:center;gap:9px;min-height:40px;padding:9px 15px;border:1px solid #c7d7fe;border-radius:10px;background:#eef4ff;color:#2447b2;font-size:13px;font-weight:750;line-height:1.2;white-space:nowrap;transition:background .15s ease,border-color .15s ease}
+.workspaceLayout .panelHead .backToPipeline:hover{background:#dfeaff;border-color:#98b4fc}
+.workspaceLayout .panelHead .backToPipeline:focus-visible{outline:3px solid #94b5ff;outline-offset:2px}
+.workspaceLayout .panelHead .backToPipeline .backArrow{font-size:19px;line-height:1}
+@media(max-width:650px){.workspaceLayout .panelHead .backToPipeline{min-height:44px;padding:10px 12px;font-size:12px}}
