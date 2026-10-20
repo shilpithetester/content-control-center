@@ -2,7 +2,7 @@
 create table if not exists public.medical_research_dossiers (
  id uuid primary key default gen_random_uuid(),
  owner_id uuid not null references auth.users(id),
- content_item_id text not null references public.content_items(id),
+ content_item_id uuid not null references public.content_items(id),
  topic_brief_version integer not null check (topic_brief_version > 0),
  execution_id uuid references public.agent_executions(id),
  contract_version integer not null default 1,
