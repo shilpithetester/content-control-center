@@ -69,10 +69,10 @@ Deno.serve(async (request: Request) => {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(cutoff) || Number.isNaN(Date.parse(cutoff))) return reply({ error: "Invalid cutoff date" }, 400);
   let limit: number;
   try { limit = validateSourceLimit(body.max_sources); } catch (error) { return reply({ error: String(error) }, 400); }
-  const { data: item } = await admin.from("content_items").select("id,topic,hold").eq("id", contentId).eq("owner_id", owner).maybeSingle();
+  const { data: item } = await admin.from("content_items").select("id,content_id,topic,hold").eq("content_id", contentId).eq("owner_id", owner).maybeSingle();
   if (!item) return reply({ error: "Content not found" }, 404);
   if (item.hold) return reply({ error: "Content is on HOLD" }, 409);
-  const { data: brief, error: briefError } = await admin.from("topic_briefs").select("*").eq("owner_id", owner).eq("content_item_id", contentId).eq("version", version).maybeSingle();
+  const { data: brief, error: briefError } = await admin.from("topic_briefs").select("*").eq("owner_id", owner).eq("content_item_id", item.id).eq("version", version).maybeSingle();
   if (briefError || !brief) return reply({ error: "Immutable Topic Brief version not found" }, 404);
   const questions = asStrings(brief.research_questions);
   const queries = asStrings(brief.search_queries);
@@ -80,7 +80,7 @@ Deno.serve(async (request: Request) => {
   const { data: cfg } = await admin.from("llm_settings").select("provider,model").eq("owner_id", owner).maybeSingle();
   if (cfg?.provider !== "deepseek") return reply({ error: "Agent 02 draft runner supports DeepSeek only" }, 422);
   const key = Deno.env.get("DEEPSEEK_API_KEY"); if (!key) return reply({ error: "DeepSeek key unavailable" }, 503);
-  const { data: execution, error: executionError } = await admin.from("agent_executions").insert({ owner_id: owner, content_item_id: contentId, agent_code: "AGENT_02", agent_name: "Medical Research", status: "RUNNING", started_at: now(), input: { contract_version: 1, topic_brief_version: version, evidence_cutoff_date: cutoff, max_sources: limit } }).select("id").single();
+  const { data: execution, error: executionError } = await admin.from("agent_executions").insert({ owner_id: owner, content_item_id: item.id, agent_code: "AGENT_02", agent_name: "Medical Research", status: "RUNNING", started_at: now(), input: { contract_version: 1, topic_brief_version: version, evidence_cutoff_date: cutoff, max_sources: limit } }).select("id").single();
   if (executionError) return reply({ error: "Execution log creation failed: " + executionError.message }, 500);
   try {
     const unique = new Map<string, Source>();
@@ -94,7 +94,7 @@ Deno.serve(async (request: Request) => {
     const raw = await synthesize(key, String(cfg.model || "deepseek-chat"), String(item.topic), questions, sources);
     const clean = validateClaims(raw, sources);
     const dossier = { contract_version: 1, content_id: contentId, topic_brief_version: version, evidence_cutoff_date: cutoff, medical_summary: clean.medical_summary, evidence_sources: sources, medical_claims: clean.medical_claims, clinical_guidelines: clean.clinical_guidelines, contraindications: clean.contraindications, drug_interactions_or_precautions: clean.drug_interactions_or_precautions, vulnerable_populations: clean.vulnerable_populations, red_flags: clean.red_flags, evidence_gaps: clean.evidence_gaps, research_confidence: "LOW", research_status: "NEEDS_SOURCE_VERIFICATION", requires_medical_review: true, recommended_next_step: "INTEGRATIVE_ANALYSIS", agent03_handoff_allowed: false };
-    const { data: saved, error: saveError } = await admin.from("medical_research_dossiers").insert({ owner_id: owner, content_item_id: contentId, topic_brief_version: version, execution_id: execution.id, contract_version: 1, research_status: "NEEDS_SOURCE_VERIFICATION", dossier }).select("id,created_at").single();
+    const { data: saved, error: saveError } = await admin.from("medical_research_dossiers").insert({ owner_id: owner, content_item_id: item.id, topic_brief_version: version, execution_id: execution.id, contract_version: 1, research_status: "NEEDS_SOURCE_VERIFICATION", dossier }).select("id,created_at").single();
     if (saveError) throw new Error("Dossier persistence failed: " + saveError.message);
     await admin.from("agent_executions").update({ status: "COMPLETED", finished_at: now(), model: "deepseek:" + cfg.model, output: { dossier_id: saved.id, research_status: dossier.research_status } }).eq("id", execution.id).eq("owner_id", owner);
     return reply({ ok: true, dossier_id: saved.id, research_status: dossier.research_status, medical_review_required: true, source_count: sources.length, next_stage: "MANUAL_SOURCE_VERIFICATION" });
