@@ -54,3 +54,31 @@
  .workspaceLayout.pipelineOnly table{min-width:680px}
  .topRight{flex-wrap:wrap}
 }
+
+
+/* UI review 2026-10-20: compact header, remove unused dark header space. */
+.workspaceApp .top{height:auto;min-height:68px;background:#fff;color:var(--text);border-bottom:1px solid var(--line);padding:12px 22px;display:flex;align-items:center;justify-content:flex-start;gap:18px}
+.workspaceApp .top .brand{flex:1;min-width:0;font-size:16px;line-height:1.25}
+.workspaceApp .top .brand span{display:block;font-size:11px;color:var(--muted);margin-top:3px}
+.workspaceApp .top .topRight{margin-left:auto;display:flex;align-items:center;gap:8px;flex-wrap:nowrap}
+.workspaceApp .top .topRight .userEmail{max-width:170px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted)}
+.workspaceApp .top button{background:#f2f4f7;color:#344054;border:1px solid #d0d5dd;padding:9px 12px;white-space:nowrap}
+.workspaceApp .top .menuToggle{display:none;flex:0 0 42px;width:42px;height:42px;align-items:center;justify-content:center;font-size:22px;line-height:1;padding:0}
+.workspaceApp .workspaceShell{min-height:calc(100vh - 68px)}
+.workspaceApp .workspaceContent{margin:0;max-width:none}
+.workspaceApp .workspaceNav{min-height:calc(100vh - 68px)}
+@media(max-width:900px){
+ .workspaceApp .top{padding:10px 14px;gap:10px;min-height:64px}
+ .workspaceApp .top .menuToggle{display:inline-flex}
+ .workspaceApp .top .brand{font-size:14px;max-width:none}
+ .workspaceApp .top .brand span{font-size:10px}
+ .workspaceApp .top .topRight{gap:6px}
+ .workspaceApp .top .topRight .userEmail{display:none}
+ .workspaceApp .top .topRight button{font-size:12px;padding:9px 8px}
+ .workspaceApp .workspaceNav{min-height:100vh}
+}
+@media(max-width:380px){
+ .workspaceApp .top{gap:6px;padding:9px 8px}
+ .workspaceApp .top .brand{font-size:12px}
+ .workspaceApp .top .topRight button{padding:8px 6px;font-size:11px}
+}
