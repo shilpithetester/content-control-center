@@ -11,3 +11,46 @@
 .layout > .panel:last-child .tabs button{flex:0 0 auto;white-space:nowrap}
 .layout > .panel:last-child .tabbody{overflow-x:auto}
 @media(min-width:1500px){.layout > .panel:last-child .actions{grid-template-columns:repeat(3,minmax(0,1fr))}}
+
+
+/* Responsive multi-view workspace: UI-only, no backend behavior changes. */
+.workspaceApp{min-height:100vh}
+.workspaceShell{display:grid;grid-template-columns:220px minmax(0,1fr);min-height:calc(100vh - 64px)}
+.workspaceNav{background:#fff;border-right:1px solid var(--line);padding:22px 12px;display:flex;flex-direction:column;gap:8px}
+.workspaceNav .navTitle{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:#667085;padding:8px 12px}
+.workspaceNav button{width:100%;text-align:left;padding:12px;border:0;border-radius:9px;background:transparent;color:#344054;font-weight:650;cursor:pointer}
+.workspaceNav button:hover,.workspaceNav button.navActive{background:#eef2ff;color:#3538cd}
+.workspaceContent{width:100%;max-width:none;min-width:0}
+.menuToggle{background:transparent;border:1px solid #d0d5dd;border-radius:8px;padding:8px 12px;font-size:19px;cursor:pointer;display:none}
+.navBackdrop{display:none}
+.workspaceLayout{display:block;min-width:0}
+.workspaceLayout>.panel{width:100%;min-width:0}
+.workspaceLayout.pipelineOnly>.panel:last-child{display:none}
+.workspaceLayout.detailOnly>.panel:first-child{display:none}
+.workspaceLayout.detailOnly .tabbody{max-height:none;overflow:visible}
+.workspaceLayout.detailOnly .tabs{overflow-x:auto;flex-wrap:nowrap}
+.workspaceLayout.detailOnly .tabs button{flex:0 0 auto}
+.workspaceLayout.detailOnly .actions{display:flex;flex-wrap:wrap}
+.workspaceLayout.detailOnly .actions button{flex:1 1 140px}
+.workspaceLayout.detailOnly .topicBrief{max-width:100%;overflow-wrap:anywhere}
+.workspaceLayout.detailOnly .topicBrief li{overflow-wrap:anywhere}
+.workspaceWelcome{margin-top:18px;padding:22px}
+.workspaceWelcome button{margin-top:12px}
+.workspaceLayout .tableWrap{overflow-x:auto}
+@media(max-width:900px){
+ .workspaceShell{display:block}
+ .menuToggle{display:inline-flex}
+ .workspaceNav{position:fixed;z-index:1002;top:0;bottom:0;left:0;width:min(82vw,290px);box-shadow:8px 0 28px #10182822;transform:translateX(-110%);transition:transform .2s ease}
+ .workspaceNav.isOpen{transform:translateX(0)}
+ .navBackdrop{display:block;position:fixed;inset:0;z-index:1001;background:#10182888;border:0}
+ .workspaceContent{min-width:0}
+}
+@media(max-width:650px){
+ .workspaceLayout.detailOnly .detail{padding:14px}
+ .workspaceLayout.detailOnly .actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}
+ .workspaceLayout.detailOnly .actions button{min-width:0;white-space:normal}
+ .workspaceLayout .panelHead{flex-wrap:wrap;gap:8px}
+ .workspaceLayout .tabbody{padding:12px}
+ .workspaceLayout.pipelineOnly table{min-width:680px}
+ .topRight{flex-wrap:wrap}
+}
