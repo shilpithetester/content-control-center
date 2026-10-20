@@ -10,3 +10,8 @@ test('metadata only cannot hand off',()=>assert.equal(handoffAllowed({research_s
 test('empty summary rejected',()=>assert.throws(()=>validateClaims({medical_summary:'',medical_claims:[]},source)));
 test('too many claims rejected',()=>assert.throws(()=>validateClaims({medical_summary:'x',medical_claims:Array(31).fill(good.medical_claims[0])},source)));
 test('unapproved handoff rejected',()=>assert.equal(handoffAllowed({research_status:'NEEDS_REVIEW',requires_medical_review:false,medical_claims:[]}),false));
+
+test('missing source_ids rejected',()=>assert.throws(()=>validateClaims({...good,medical_claims:[{statement:'No refs'}]},source)));
+test('duplicate source IDs deduplicated',()=>assert.deepEqual(validateClaims({...good,medical_claims:[{statement:'x',source_ids:['PMID:123','PMID:123']}]},source).medical_claims[0].source_ids,['PMID:123']));
+test('verified claims still require review decision',()=>assert.equal(handoffAllowed({research_status:'APPROVED_FOR_HANDOFF',requires_medical_review:true,medical_claims:[{verification_status:'VERIFIED'}]}),false));
+test('unverified claim blocks approved dossier',()=>assert.equal(handoffAllowed({research_status:'APPROVED_FOR_HANDOFF',requires_medical_review:false,medical_claims:[{verification_status:'UNVERIFIED'}]}),false));
