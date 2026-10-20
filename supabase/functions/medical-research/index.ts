@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { validateClaims, validateSourceLimit } from "./safety-gate.mjs";
 
 const headers = { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type" };
 const reply = (data: unknown, status = 200) => new Response(JSON.stringify(data), { status, headers });
@@ -66,7 +67,8 @@ Deno.serve(async (request: Request) => {
   if (body.contract_version !== 1 || body.research_mode !== "EVIDENCE_FIRST") return reply({ error: "Unsupported contract or research mode" }, 400);
   const cutoff = String(body.evidence_cutoff_date || now().slice(0, 10));
   if (!/^\d{4}-\d{2}-\d{2}$/.test(cutoff) || Number.isNaN(Date.parse(cutoff))) return reply({ error: "Invalid cutoff date" }, 400);
-  const limit = Math.min(MAX_SOURCES, Math.max(1, Number(body.max_sources) || 8));
+  let limit: number;
+  try { limit = validateSourceLimit(body.max_sources); } catch (error) { return reply({ error: String(error) }, 400); }
   const { data: item } = await admin.from("content_items").select("id,topic,hold").eq("id", contentId).eq("owner_id", owner).maybeSingle();
   if (!item) return reply({ error: "Content not found" }, 404);
   if (item.hold) return reply({ error: "Content is on HOLD" }, 409);
@@ -90,7 +92,7 @@ Deno.serve(async (request: Request) => {
     const sources = [...unique.values()];
     if (!sources.length) throw new Error("No retrievable PubMed sources. Research cannot be evidence verified.");
     const raw = await synthesize(key, String(cfg.model || "deepseek-chat"), String(item.topic), questions, sources);
-    const clean = validate(raw, sources);
+    const clean = validateClaims(raw, sources);
     const dossier = { contract_version: 1, content_id: contentId, topic_brief_version: version, evidence_cutoff_date: cutoff, medical_summary: clean.medical_summary, evidence_sources: sources, medical_claims: clean.medical_claims, clinical_guidelines: clean.clinical_guidelines, contraindications: clean.contraindications, drug_interactions_or_precautions: clean.drug_interactions_or_precautions, vulnerable_populations: clean.vulnerable_populations, red_flags: clean.red_flags, evidence_gaps: clean.evidence_gaps, research_confidence: "LOW", research_status: "NEEDS_SOURCE_VERIFICATION", requires_medical_review: true, recommended_next_step: "INTEGRATIVE_ANALYSIS", agent03_handoff_allowed: false };
     const { data: saved, error: saveError } = await admin.from("medical_research_dossiers").insert({ owner_id: owner, content_item_id: contentId, topic_brief_version: version, execution_id: execution.id, contract_version: 1, research_status: "NEEDS_SOURCE_VERIFICATION", dossier }).select("id,created_at").single();
     if (saveError) throw new Error("Dossier persistence failed: " + saveError.message);
