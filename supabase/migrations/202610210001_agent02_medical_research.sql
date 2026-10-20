@@ -12,5 +12,17 @@ create table if not exists public.medical_research_dossiers (
 );
 create index if not exists medical_research_dossiers_owner_content_idx on public.medical_research_dossiers(owner_id,content_item_id,created_at desc);
 alter table public.medical_research_dossiers enable row level security;
-create policy "Owners can read own medical research" on public.medical_research_dossiers for select to authenticated using (owner_id = auth.uid());
+do $ begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'medical_research_dossiers'
+      and policyname = 'Owners can read own medical research'
+  ) then
+    create policy "Owners can read own medical research"
+      on public.medical_research_dossiers
+      for select to authenticated
+      using (owner_id = auth.uid());
+  end if;
+end $;
 -- Deliberately no direct client write policy: authenticated Edge Function validates inputs and uses service role.
