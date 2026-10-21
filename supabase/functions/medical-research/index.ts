@@ -49,6 +49,16 @@ Deno.serve(async (request: Request) => {
   if (authError || !auth.user) return reply({ error: "Unauthorized" }, 401);
   const owner = auth.user.id;
   const body = await request.json().catch(() => ({}));
+  if (body.action === "LIST_DOSSIERS") {
+    const contentId = String(body.content_id || "");
+    if (!/^HT-[0-9]+$/.test(contentId)) return reply({ error: "Valid content_id required" }, 400);
+    const { data: item, error: itemError } = await admin.from("content_items").select("id").eq("content_id", contentId).eq("owner_id", owner).maybeSingle();
+    if (itemError || !item) return reply({ error: "Content not found" }, 404);
+    const { data: dossiers, error: listError } = await admin.from("medical_research_dossiers").select("id,topic_brief_version,research_status,dossier,created_at").eq("owner_id", owner).eq("content_item_id", item.id).order("created_at", { ascending: false }).limit(5);
+    if (listError) return reply({ error: "Dossier retrieval failed" }, 500);
+    return reply({ ok: true, dossiers: dossiers || [] });
+  }
+
   const contentId = String(body.content_id || "");
   const version = Number(body.topic_brief_version);
   if (!/^HT-[0-9]+$/.test(contentId) || !Number.isSafeInteger(version) || version < 1) return reply({ error: "Valid content_id and topic_brief_version required" }, 400);
