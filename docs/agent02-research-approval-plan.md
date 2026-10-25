@@ -24,3 +24,8 @@ Human medical feedback is not a blocker for the current research/analysis stage.
 
 ## Runtime integration
 New function evidence-review; existing medical-research v10 remains unchanged. All calls use existing Supabase project, user JWT and server-side DeepSeek configuration. No credential extraction. Rollback frontend to release commit 179e798 if needed; new function does not affect old frontend calls.
+
+## Controlled live iteration
+HT-0003 was created under the existing authenticated production owner; no HT-0002 ownership changes. Account provider was changed from unconfigured Anthropic to existing configured DeepSeek after the first pilot attempt failed for missing Anthropic key. Topic Brief v1 and Agent02 dossier f7d0d7c4-054b-4d8f-bb36-65d089f56d23 persisted. First whole-review output truncated and saved no approval. Batching introduced; measured review 80e7cd94-c9a3-4191-8d60-9c9c6262018f gave identity/abstract/quotes 100%, support 75% (9/12), correctly REQUEST_REVISION. Three wording errors documented; threshold remains 80%.
+
+Bounded automatic correction: when failed claims have genuine exact source quotes, create a new unverified dossier with extractive source-linked wording, retain original dossier/review and lineage, then run a fresh evidence audit. One revision generation maximum. Missing/fabricated source evidence cannot be auto-corrected this way. Existing completed review provenance is required for the REVISE action. Frontend performs this loop without user clicks after a run. 68 tests and frontend build are the next verification gates.

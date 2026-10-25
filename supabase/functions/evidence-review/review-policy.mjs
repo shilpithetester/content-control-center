@@ -34,3 +34,14 @@ export function buildResearchDecision(dossier, liveSources, modelReview) {
   claims:results,accepted_claim_ids:pass?accepted.map(r=>r.claim_id):[],excluded_claim_ids:excluded.map(r=>r.claim_id),
   handoff:pass?{target:'AGENT_03',mode:'RESEARCH_ANALYSIS_ONLY',claims:claims.filter(c=>accepted.some(r=>r.claim_id===c.claim_id)),source_ids:[...new Set(claims.filter(c=>accepted.some(r=>r.claim_id===c.claim_id)).flatMap(c=>c.source_ids))],evidence_gaps:dossier.evidence_gaps||[],constraints:['Original claims remain UNVERIFIED; automated abstract-support review is not independent clinical verification.','Preserve population, age, observational-design and evidence-gap caveats.','No prescribing, medical approval, publishing, or automatic clinical workflow advancement.']}:null};
 }
+
+export function buildExtractiveRevision(dossier, findings, reviewId) {
+ if(findings.status!=='REVISION_REQUIRED'||(dossier.revision_lineage?.auto_revision_count||0)>=1)return null;
+ const rejected=findings.claims.filter(c=>!c.accepted);
+ if(!rejected.length||rejected.some(c=>!c.identity_pass||!c.abstract_pass||!c.quote_pass||!c.evidence_quotes.length))return null;
+ const claims=dossier.medical_claims.map(c=>{
+  const issue=rejected.find(r=>r.claim_id===c.claim_id);if(!issue)return {...c};
+  return {...c,statement:issue.evidence_quotes.map(q=>`${q.source_id} reports: “${q.quote}”`).join(' '),caveats:[c.caveats,issue.limitation,'Extractive source quotation; no additional causal or population inference.'].filter(Boolean).join(' '),verification_status:'UNVERIFIED',evidence_strength:'UNKNOWN',revision_reason:issue.rationale};
+ });
+ return {...dossier,medical_claims:claims,medical_summary:'Source-linked research revision. Preserve study populations, original evidence gaps and caveats. Corrected claims quote the supplied abstracts directly; automated support review is still required.',research_status:'NEEDS_SOURCE_VERIFICATION',research_confidence:'LOW',requires_medical_review:true,agent03_handoff_allowed:false,recommended_next_step:'AUTOMATED_RESEARCH_EVIDENCE_REVIEW',revision_lineage:{parent_review_id:reviewId,auto_revision_count:1,changed_claim_ids:rejected.map(c=>c.claim_id),method:'EXTRACTIVE_SOURCE_CORRECTION'}};
+}
