@@ -29,3 +29,16 @@ New function evidence-review; existing medical-research v10 remains unchanged. A
 HT-0003 was created under the existing authenticated production owner; no HT-0002 ownership changes. Account provider was changed from unconfigured Anthropic to existing configured DeepSeek after the first pilot attempt failed for missing Anthropic key. Topic Brief v1 and Agent02 dossier f7d0d7c4-054b-4d8f-bb36-65d089f56d23 persisted. First whole-review output truncated and saved no approval. Batching introduced; measured review 80e7cd94-c9a3-4191-8d60-9c9c6262018f gave identity/abstract/quotes 100%, support 75% (9/12), correctly REQUEST_REVISION. Three wording errors documented; threshold remains 80%.
 
 Bounded automatic correction: when failed claims have genuine exact source quotes, create a new unverified dossier with extractive source-linked wording, retain original dossier/review and lineage, then run a fresh evidence audit. One revision generation maximum. Missing/fabricated source evidence cannot be auto-corrected this way. Existing completed review provenance is required for the REVISE action. Frontend performs this loop without user clicks after a run. 68 tests and frontend build are the next verification gates.
+
+## Verified final result — 26 October 2026 IST
+Production commit dd04941986cb373babdcf9427084505c47338816 READY; PRs #3 and #4 merged. evidence-review v3 ACTIVE with JWT validation; medical-research v10 unchanged. 68/68 automated tests and frontend build passed.
+
+Genuine production pilot HT-0003: Topic Brief v1, original dossier f7d0d7c4-054b-4d8f-bb36-65d089f56d23, rejected review 80e7cd94-c9a3-4191-8d60-9c9c6262018f (75% support), source-corrected dossier d90229e5-0af8-4da1-a993-b962563d2c98.
+
+Fresh review 2e22c376-9002-4f7b-aa26-96c6889caa8b: APPROVED_FOR_RESEARCH. 12/12 claims accepted; identity, abstracts, exact quotes and automated support each 100%; threshold retained at 80%. This measures automated abstract-level audit, not clinical certainty. Research handoff contains 12 claims and 10 refreshed source snapshots. Clinical/publishing approval false; original claims UNVERIFIED.
+
+Audit execution 804d7cbf-14e9-4797-99d2-bf91e624aae1 completed in 142489ms; final review usage 10498 prompt + 27560 completion = 38058 tokens. Earlier failed/revision records preserved. Browser scorecard and saved result verified. No user test clicks or manual medical feedback required.
+
+Existing Project Brain checkpoint SESSION-20261025-003 was created through the genuine authenticated production owner and read back ACTIVE. No duplicate Brain or impersonation. Original three dossier checksums unchanged. No staging used.
+
+Agent03 research input packet is ready. Its analysis executor is not implemented within this Agent02 approval scope; no Agent03 execution is claimed.
