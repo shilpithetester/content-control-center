@@ -15,3 +15,4 @@ test('missing source_ids rejected',()=>assert.throws(()=>validateClaims({...good
 test('duplicate source IDs deduplicated',()=>assert.deepEqual(validateClaims({...good,medical_claims:[{statement:'x',source_ids:['PMID:123','PMID:123']}]},source).medical_claims[0].source_ids,['PMID:123']));
 test('verified claims still require review decision',()=>assert.equal(handoffAllowed({research_status:'APPROVED_FOR_HANDOFF',requires_medical_review:true,medical_claims:[{verification_status:'VERIFIED'}]}),false));
 test('unverified claim blocks approved dossier',()=>assert.equal(handoffAllowed({research_status:'APPROVED_FOR_HANDOFF',requires_medical_review:false,medical_claims:[{verification_status:'UNVERIFIED'}]}),false));
+
