@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { stripTypeScriptTypes } from 'node:module';
-import { parseAbstracts, fetchEvidence } from './evidence-utils.mjs';
+import { parseAbstracts, fetchEvidence, routineSourceEligible } from './evidence-utils.mjs';
 import { validateClaims, handoffAllowed, validateSourceLimit } from './safety-gate.mjs';
 
 test('empty citation array is rejected', () => assert.throws(() => validateClaims({ medical_summary:'x', medical_claims:[{statement:'x',source_ids:[]}] }, [{source_id:'PMID:1'}])));
@@ -21,7 +21,7 @@ export async function harness({body, authorized=true, hold=false, fetchImpl=asyn
   }};
   let source=readFileSync(new URL('./index.ts',import.meta.url),'utf8').replace(/^import .*;\n/gm,'');
   source=stripTypeScriptTypes(source);
-  const ctx={createClient:()=>client,validateClaims,validateSourceLimit,parseAbstracts,fetchEvidence:(url,opts)=>fetchEvidence(url,opts,{fetcher:fetchImpl,sleep:async()=>{}}),AbortSignal,Request,Response,URLSearchParams,AbortController,setTimeout,clearTimeout,console,fetch:fetchImpl,Deno:{env:{get:(key)=>key==='DEEPSEEK_API_KEY'?'test-key':'test'},serve:fn=>{handler=fn}}};
+  const ctx={createClient:()=>client,routineSourceEligible,validateClaims,validateSourceLimit,parseAbstracts,fetchEvidence:(url,opts)=>fetchEvidence(url,opts,{fetcher:fetchImpl,sleep:async()=>{}}),Date,AbortSignal,Request,Response,URLSearchParams,AbortController,setTimeout,clearTimeout,console,fetch:fetchImpl,Deno:{env:{get:(key)=>key==='DEEPSEEK_API_KEY'?'test-key':'test'},serve:fn=>{handler=fn}}};
   vm.runInNewContext(source,ctx);
   const response=await handler(new Request('https://example.test',{method:'POST',headers:{Authorization:'Bearer test-token','Content-Type':'application/json'},body:JSON.stringify(body === undefined ? {} : body)}));
   return {status:response.status,body:await response.json(),writes,filters};
@@ -39,11 +39,11 @@ function mockResearch({abstract=true,unknownCitation=false,truncated=false}={}) 
  const fetchImpl=async(url,options)=>{
   const u=new URL(url);
   if(u.pathname.endsWith('esearch.fcgi'))return Response.json({esearchresult:{idlist:[String(++searches)]}});
-  if(u.pathname.endsWith('esummary.fcgi')){const id=u.searchParams.get('id');return Response.json({result:{[id]:{title:'Healthy adult routine systematic review '+id,authors:[],pubdate:'2025',pubtype:['Systematic Review']}}})}
+  if(u.pathname.endsWith('esummary.fcgi')){const id=u.searchParams.get('id');return Response.json({result:{[id]:{title:({1:'Physical activity guidelines for healthy adults',2:'Sleep duration recommendations for healthy adults',3:'Healthy dietary patterns systematic review',4:'Sedentary behavior and sitting breaks systematic review',5:'Safety and adverse events of yoga systematic review',6:'Water intake and hydration status systematic review'}[id]||'Physical activity guidelines for healthy adults'),authors:[],pubdate:'2025',pubtype:['Systematic Review']}}})}
   if(u.pathname.endsWith('efetch.fcgi'))return new Response('<PubmedArticleSet>'+u.searchParams.get('id').split(',').map(id=>'<PubmedArticle><PMID>'+id+'</PMID>'+(abstract?'<Abstract><AbstractText>Healthy adult routines were studied. Evidence is limited.</AbstractText></Abstract>':'')+'</PubmedArticle>').join('')+'</PubmedArticleSet>');
   if(u.hostname==='api.deepseek.com'){
    modelCalls++;const sent=JSON.parse(options.body);const context=JSON.parse(sent.messages[1].content);assert.ok(context.sources.every(x=>x.abstract_text));
-   return Response.json({choices:[{finish_reason:truncated?'length':'stop',message:{content:JSON.stringify({medical_summary:'Draft research only',medical_claims:[{statement:'Evidence remains limited.',source_ids:[unknownCitation?'PMID:999':context.sources[0].source_id],verification_status:'VERIFIED',evidence_strength:'HIGH'}]})}}]});
+   return Response.json({usage:{prompt_tokens:120,completion_tokens:80,total_tokens:200},choices:[{finish_reason:truncated?'length':'stop',message:{content:JSON.stringify({medical_summary:'Draft research only',medical_claims:[{statement:'Evidence remains limited.',source_ids:[unknownCitation?'PMID:999':context.sources[0].source_id],verification_status:'VERIFIED',evidence_strength:'HIGH'}]})}}]});
   }throw Error('unexpected URL');
  };return {fetchImpl,get modelCalls(){return modelCalls}};
 }
@@ -92,4 +92,13 @@ test('repeated PMID across domains is stored once',async()=>{
 test('invalid model JSON fails without dossier',async()=>{
  const mock=mockResearch();const fetchImpl=(url,options)=>new URL(url).hostname==='api.deepseek.com'?Promise.resolve(Response.json({choices:[{finish_reason:'stop',message:{content:'{invalid'}}]})):mock.fetchImpl(url,options);
  const r=await harness({body:valid,fetchImpl});assert.equal(r.status,500);assert.equal(r.writes.filter(x=>x.table==='medical_research_dossiers').length,0);assert.equal(r.writes.at(-1).value.status,'FAILED');
+});
+
+test('successful dossier records bounded public usage and runtime provenance',async()=>{
+ const mock=mockResearch();const r=await harness({body:valid,fetchImpl:mock.fetchImpl});assert.equal(r.status,200);
+ const d=r.writes.find(x=>x.table==='medical_research_dossiers').value.dossier;
+ assert.equal(d.execution_audit.usage.total_tokens,200);assert.equal(d.execution_audit.usage_available,true);
+ assert.equal(d.execution_audit.runtime_revision,'agent02-routine-quality-20261026');
+ assert.ok(d.execution_audit.elapsed_ms>=0);assert.equal(d.execution_audit.abstract_bearing_sources,6);
+ assert.equal(JSON.stringify(d).includes('test-key'),false);
 });

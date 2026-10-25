@@ -29,3 +29,27 @@ export async function fetchEvidence(url, options = {}, {fetcher=fetch, sleep=ms=
     } finally {clearTimeout(timer)}
   }
 }
+
+// Conservative relevance gate for the general healthy-adult routine pilot.
+// Title matching is a retrieval screen, never clinical verification.
+export function routineSourceEligible(source, domain, cutoff) {
+ const title=String(source.title||'').toLowerCase();
+ if (/cancer|kidney|renal|dialysis|transplant|cardiomyopathy|pregnan|postpartum|sarcopenia|multimorbid|pediatric|children|adolescen|cannabis|orexin|insomnia|dysphagia|oral.processing|placebo|brain.endurance|hydrotherapy|versican|parkinson|stroke|capsulitis|manual.therapy|rehabilitation|magnesium|melatonin/.test(title)) return false;
+ const match={
+  physical_activity:/physical.activity|exercise|walking/,
+  sleep:/sleep.duration|sleep.hygiene|healthy.sleep|sleep.recommend|recommended.amount.of.sleep/,
+  nutrition:/dietary.pattern|healthy.diet|diet.quality|mediterranean.diet/,
+  sedentary:/sedentary|sitting|breaking.up/,
+  yoga_safety:/yoga/,
+  hydration:/water.intake|drinking.water|water.consumption|fluid.intake|hydration.status|hydration.and.health/
+ }[domain];
+ if (!match?.test(title)) return false;
+ if (domain==='yoga_safety'&&!/safe|safety|adverse|contraindicat|injur/.test(title)) return false;
+ const date=String(source.publication_date||'');
+ const year=date.match(/\b(\d{4})\b/);if(!year)return false;
+ if(Number(year[1])>Number(cutoff.slice(0,4)))return false;
+ const months=['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'];
+ const month=months.findIndex(m=>date.toLowerCase().includes(m));
+ if(Number(year[1])===Number(cutoff.slice(0,4))&&month>=Number(cutoff.slice(5,7)))return false;
+ return true;
+}
