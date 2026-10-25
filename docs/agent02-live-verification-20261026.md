@@ -51,3 +51,6 @@ Automatic approval review rejected the attempted GitHub tree containing AGENTS.m
 
 ## Publication authorization resolved
 The user subsequently explicitly authorized uploading runtime source, tests, this live report, AGENTS.md and production rollback source to the existing repository work branch. The earlier publication-blocker entry is historical and is superseded by this authorization and the verified remote branch commit.
+
+## Production release completed
+PR #2 merged into feature/ui-responsive-workspace with clean mergeability and successful Vercel status. Merge commit 179e7988bf962760ac0487e90bac69477f55a2bc. Production deployment dpl_DxgHnjfbtKJgem9aWJRNznJEwauU READY with no alias error; https://content-control-center-sigma.vercel.app resolves to that deployment. Shared medical-research v10 remains ACTIVE with JWT verification enabled. Browser canonical login page renders and captured browser error logs are empty. Canonical origin is signed out; no authenticated canonical-origin execution is claimed. The real authenticated E2E was completed on the preserved testing preview with the same app source and shared backend. 43 regression tests passed. No staging used; no clinical approval or Agent03 handoff. Existing preview UI changes are included in production.
