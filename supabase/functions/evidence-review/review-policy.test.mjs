@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {buildResearchDecision,normalize} from './review-policy.mjs';
+import {buildResearchDecision,buildExtractiveRevision,normalize} from './review-policy.mjs';
 const abstract='Adults in this observational study had an association between activity and sleep quality; no causality was established.';
 const source={source_id:'PMID:1',title:'Activity and sleep',abstract_text:abstract,identity_verified:true};
 const dossier={evidence_sources:[source],medical_claims:Array.from({length:5},(_,i)=>({claim_id:'C'+(i+1),statement:'Association observed in adults; not causal.',source_ids:['PMID:1'],verification_status:'UNVERIFIED'})),evidence_gaps:['No full text']};
@@ -17,3 +17,6 @@ test('limited population must preserve explicit limitation',()=>{const m=review(
 test('duplicate and missing claim reviews fail closed',()=>{const m=review();m.claims.pop();assert.throws(()=>buildResearchDecision(dossier,[source],m));m.claims.push(m.claims[0]);assert.throws(()=>buildResearchDecision(dossier,[source],m))});
 test('unknown citation quote cannot pass',()=>{const m=review();m.claims[0].evidence_quotes[0].source_id='PMID:999';assert.equal(buildResearchDecision(dossier,[source],m).claims[0].accepted,false)});
 test('normalization handles punctuation and unicode without accepting short quotes',()=>{assert.equal(normalize('Sleep—Quality!'),'sleep quality');const m=review();m.claims[0].evidence_quotes[0].quote='Adults';assert.equal(buildResearchDecision(dossier,[source],m).claims[0].accepted,false)});
+
+test('source-supported revision is append-only data and bounded to one generation',()=>{const m=review();m.claims[3].verdict='PARTIAL';m.claims[4].verdict='PARTIAL';const f=buildResearchDecision(dossier,[source],m);const revised=buildExtractiveRevision(dossier,f,'review-1');assert.equal(revised.revision_lineage.auto_revision_count,1);assert.equal(revised.medical_claims[4].statement.includes(abstract),true);assert.equal(dossier.medical_claims[4].statement,'Association observed in adults; not causal.');assert.equal(revised.agent03_handoff_allowed,false);assert.equal(buildExtractiveRevision(revised,f,'review-2'),null)});
+test('missing/fabricated evidence cannot be repaired into extractive approval',()=>{const m=review();m.claims.forEach(c=>c.evidence_quotes[0].quote='Nonexistent evidence quotation not supported by any source.');const f=buildResearchDecision(dossier,[source],m);assert.equal(buildExtractiveRevision(dossier,f,'review-1'),null)});
