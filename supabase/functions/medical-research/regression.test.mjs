@@ -13,17 +13,18 @@ test('boolean is not a source limit', () => assert.throws(() => validateSourceLi
 
 export async function harness({body, authorized=true, hold=false, fetchImpl=async()=>{throw Error('unexpected network')}, dataOverrides={}}={}) {
   const writes=[];
+  const filters=[];
   let handler;
   const base={content_items:{id:'item-1',topic:'Healthy Daily Routine',hold},topic_briefs:{research_questions:['What helps healthy adults?'],search_queries:['healthy adults routine']},llm_settings:{provider:'deepseek',model:'deepseek-chat'},agent_executions:{id:'execution-1'},medical_research_dossiers:{id:'dossier-1',created_at:'2026-10-25'}};
   const client={auth:{getUser:async()=>({data:{user:authorized?{id:'owner-1'}:null},error:null})},from(table){
-    const q={select(){return q},eq(){return q},order(){return q},limit(){return q},insert(value){writes.push({table,action:'insert',value});return q},update(value){writes.push({table,action:'update',value});return q},maybeSingle:async()=>({data:dataOverrides[table]??base[table],error:null}),single:async()=>({data:base[table],error:null}),then(resolve){resolve({data:[],error:null})}};return q;
+    const q={select(){return q},eq(column,value){filters.push({table,column,value});return q},order(){return q},limit(){return q},insert(value){writes.push({table,action:'insert',value});return q},update(value){writes.push({table,action:'update',value});return q},maybeSingle:async()=>({data:Object.hasOwn(dataOverrides,table)?dataOverrides[table]:base[table],error:null}),single:async()=>({data:base[table],error:null}),then(resolve){resolve({data:[],error:null})}};return q;
   }};
   let source=readFileSync(new URL('./index.ts',import.meta.url),'utf8').replace(/^import .*;\n/gm,'');
   source=stripTypeScriptTypes(source);
   const ctx={createClient:()=>client,validateClaims,validateSourceLimit,parseAbstracts,fetchEvidence:(url,opts)=>fetchEvidence(url,opts,{fetcher:fetchImpl,sleep:async()=>{}}),AbortSignal,Request,Response,URLSearchParams,AbortController,setTimeout,clearTimeout,console,fetch:fetchImpl,Deno:{env:{get:(key)=>key==='DEEPSEEK_API_KEY'?'test-key':'test'},serve:fn=>{handler=fn}}};
   vm.runInNewContext(source,ctx);
   const response=await handler(new Request('https://example.test',{method:'POST',headers:{Authorization:'Bearer test-token','Content-Type':'application/json'},body:JSON.stringify(body === undefined ? {} : body)}));
-  return {status:response.status,body:await response.json(),writes};
+  return {status:response.status,body:await response.json(),writes,filters};
 }
 const valid={content_id:'HT-0002',topic_brief_version:6,contract_version:1,research_mode:'EVIDENCE_FIRST',max_sources:12};
 test('unauthorized request never calls research or writes',async()=>{const r=await harness({body:valid,authorized:false});assert.equal(r.status,401);assert.equal(r.writes.length,0)});
@@ -56,3 +57,39 @@ test('no abstracts blocks model spend and dossier persistence',async()=>{const m
 test('invented citation fails closed',async()=>{const mock=mockResearch({unknownCitation:true});const r=await harness({body:valid,fetchImpl:mock.fetchImpl});assert.equal(r.status,500);assert.equal(r.writes.at(-1).value.status,'FAILED');assert.equal(r.writes.filter(x=>x.table==='medical_research_dossiers').length,0)});
 test('truncated model response fails closed',async()=>{const mock=mockResearch({truncated:true});const r=await harness({body:valid,fetchImpl:mock.fetchImpl});assert.equal(r.status,500);assert.equal(r.writes.filter(x=>x.table==='medical_research_dossiers').length,0)});
 test('coverage audit counts only sources actually retained by budget',async()=>{const mock=mockResearch();const r=await harness({body:{...valid,max_sources:1},fetchImpl:mock.fetchImpl});assert.equal(r.status,200);const d=r.writes.find(x=>x.table==='medical_research_dossiers').value.dossier;assert.equal(Object.values(d.retrieval_audit).reduce((n,x)=>n+x.selected,0),1);assert.ok(d.evidence_gaps.length>=5)});
+
+// Ownership and immutable-input regressions. These assert request predicates as well as outcomes.
+test('unknown or other-owner content is rejected before execution',async()=>{
+ const r=await harness({body:valid,dataOverrides:{content_items:null}});
+ assert.equal(r.status,404);assert.equal(r.writes.length,0);
+ assert.ok(r.filters.some(x=>x.table==='content_items'&&x.column==='owner_id'&&x.value==='owner-1'));
+});
+test('dossier reads are scoped to authenticated owner and resolved content UUID',async()=>{
+ const r=await harness({body:{action:'LIST_DOSSIERS',content_id:'HT-0002'}});
+ assert.equal(r.status,200);assert.equal(r.writes.length,0);
+ for(const table of ['content_items','medical_research_dossiers'])assert.ok(r.filters.some(x=>x.table===table&&x.column==='owner_id'&&x.value==='owner-1'));
+ assert.ok(r.filters.some(x=>x.table==='medical_research_dossiers'&&x.column==='content_item_id'&&x.value==='item-1'));
+});
+test('dossier read cannot disclose other-owner content',async()=>{
+ const r=await harness({body:{action:'LIST_DOSSIERS',content_id:'HT-0002'},dataOverrides:{content_items:null}});
+ assert.equal(r.status,404);assert.equal(r.writes.length,0);
+});
+test('missing immutable brief version rejects before paid work',async()=>{
+ const r=await harness({body:valid,dataOverrides:{topic_briefs:null}});
+ assert.equal(r.status,404);assert.equal(r.writes.length,0);
+ assert.ok(r.filters.some(x=>x.table==='topic_briefs'&&x.column==='version'&&x.value===6));
+ assert.ok(r.filters.some(x=>x.table==='topic_briefs'&&x.column==='owner_id'&&x.value==='owner-1'));
+});
+test('brief without queries is rejected',async()=>{const r=await harness({body:valid,dataOverrides:{topic_briefs:{research_questions:['x'],search_queries:[]}}});assert.equal(r.status,422);assert.equal(r.writes.length,0)});
+test('wrong provider rejects before execution',async()=>{const r=await harness({body:valid,dataOverrides:{llm_settings:{provider:'other'}}});assert.equal(r.status,422);assert.equal(r.writes.length,0)});
+test('future evidence cutoff rejected',async()=>{const r=await harness({body:{...valid,evidence_cutoff_date:'2999-01-01'}});assert.equal(r.status,400);assert.equal(r.writes.length,0)});
+test('array request rejected',async()=>{const r=await harness({body:[]});assert.equal(r.status,400);assert.equal(r.writes.length,0)});
+test('repeated PMID across domains is stored once',async()=>{
+ const mock=mockResearch();const fetchImpl=(url,options)=>new URL(url).pathname.endsWith('esearch.fcgi')?Promise.resolve(Response.json({esearchresult:{idlist:['1']}})):mock.fetchImpl(url,options);
+ const r=await harness({body:valid,fetchImpl});assert.equal(r.status,200);assert.equal(r.body.source_count,1);
+ const dossierWrites=r.writes.filter(x=>x.table==='medical_research_dossiers');assert.equal(dossierWrites.length,1);assert.equal(dossierWrites[0].action,'insert');
+});
+test('invalid model JSON fails without dossier',async()=>{
+ const mock=mockResearch();const fetchImpl=(url,options)=>new URL(url).hostname==='api.deepseek.com'?Promise.resolve(Response.json({choices:[{finish_reason:'stop',message:{content:'{invalid'}}]})):mock.fetchImpl(url,options);
+ const r=await harness({body:valid,fetchImpl});assert.equal(r.status,500);assert.equal(r.writes.filter(x=>x.table==='medical_research_dossiers').length,0);assert.equal(r.writes.at(-1).value.status,'FAILED');
+});
