@@ -13,7 +13,7 @@ export function approvedPacket(review,execution,currentHash){
 }
 const dangerous=s=>/\b(cures?|guaranteed|prescribe|diagnose)\b|\b\d+(?:\.\d+)?\s*(?:mg|mcg|milligrams?|tablets?)\b|\b(?:stop|discontinue|replace|increase|reduce|start|take)\b.{0,45}\b(?:medication|medicine|drug|dose)\b/i.test(s);
 export function validateAnalysis(raw,packet){
- if(!Array.isArray(raw?.sections)||raw.sections.length!==DOMAINS.length)throw Error('All eight analysis sections required');
+ if(!Array.isArray(raw?.sections)||raw.sections.length!==DOMAINS.length)throw Error('All eight analysis sections required; received '+(Array.isArray(raw?.sections)?raw.sections.length:'no sections array'));
  const domains=new Set(),findingIds=new Set(),claimMap=new Map(packet.claims.map(c=>[c.claim_id,c]));
  const sections=raw.sections.map(section=>{
   if(!DOMAINS.includes(section.domain)||domains.has(section.domain))throw Error('Unknown/duplicate analysis domain');domains.add(section.domain);
@@ -33,7 +33,7 @@ export function validateAnalysis(raw,packet){
   });return {domain:section.domain,findings,gaps};
  });
  const findings=sections.flatMap(s=>s.findings);const used=new Set(findings.flatMap(f=>f.claim_ids));const missing=packet.claims.filter(c=>!used.has(c.claim_id));if(missing.length)throw Error('Accepted claims not covered: '+missing.map(c=>c.claim_id).join(', '));if(findings.length<3||sections.filter(s=>s.findings.length).length<3)throw Error('Insufficient supported analysis coverage');
- return {contract_version:CONTRACT_VERSION,policy_version:'agent03-grounded-v3',approval_scope:'RESEARCH_ONLY',clinical_approval:false,publishing_allowed:false,sections,evidence_gaps:[...(packet.evidence_gaps||[]),...sections.flatMap(s=>s.gaps)],research_requests:sections.filter(s=>s.gaps.length).map(s=>({target_agent:'AGENT_02',status:'OPEN',domain:s.domain,questions:s.gaps})),input_claim_coverage_percent:100,combined_effect_claim_approved:false,care_boundary:'Complementary research analysis; no medication change or replacement of conventional medical care is authorized.'};
+ return {contract_version:CONTRACT_VERSION,policy_version:'agent03-grounded-v4',approval_scope:'RESEARCH_ONLY',clinical_approval:false,publishing_allowed:false,sections,evidence_gaps:[...(packet.evidence_gaps||[]),...sections.flatMap(s=>s.gaps)],research_requests:sections.filter(s=>s.gaps.length).map(s=>({target_agent:'AGENT_02',status:'OPEN',domain:s.domain,questions:s.gaps})),input_claim_coverage_percent:100,combined_effect_claim_approved:false,care_boundary:'Complementary research analysis; no medication change or replacement of conventional medical care is authorized.'};
 }
 export function assessAnalysis(analysis,audit){
  const findings=analysis.sections.flatMap(s=>s.findings);
