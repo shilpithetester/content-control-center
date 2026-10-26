@@ -11,3 +11,7 @@ All eight sections represented by supported findings or explicit gaps; every fin
 
 ## Verification and release
 Unit and handler regression tests for input provenance, ownership, HOLD, excluded claim IDs, invented quotes, dosing/substitution, unsupported audit, missing sections, immutable history and bounded retries. Existing Agent02 tests retained. Frontend build and genuine authenticated browser E2E required. PR merge after checks, production rollout with prior frontend commit preserved for rollback. Record deployed function, migration, run/artifact IDs, metrics and residual limitations. Agent04 executor is separate; this scope creates its verified input packet only.
+
+## Verification iterations
+Initial unit/handler suite: 88 tests passed; frontend build passed. Migration applied with RLS SELECT owner policy and append-only trigger verified. PR #5 merged; production commit bf7ea9b8e6a3aabff12de2780c6196ff72fa8e52 READY.
+First authenticated HT-0002 run: execution 0c3be23c-194b-4c68-8913-f10943bbd0aa, artifact 6d4295cf-81f7-474d-9642-2a45104d8a0c, 5 findings across 8 sections, separate audit support 100%, citation integrity 100%, 47.077s. Output inspection found incomplete accepted-claim coverage and ambiguous serious-versus-mild adverse-event wording despite the model audit. Tightened deterministic policy to require every accepted claim and to separate severity categories; added two regressions. 90 tests pass. Historical v1 artifact remains preserved; new policy has explicit version agent03-grounded-v2.

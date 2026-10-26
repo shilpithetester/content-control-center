@@ -22,6 +22,7 @@ export function validateAnalysis(raw,packet){
   if(!section.findings.length&&!gaps.length)throw Error('Empty section must identify evidence gap');
   const findings=section.findings.map(f=>{
    if(typeof f.id!=='string'||!f.id.trim()||findingIds.has(f.id))throw Error('Duplicate/invalid finding ID');findingIds.add(f.id);
+   if(typeof f.statement==='string'&&/\bserious\b/i.test(f.statement)&&/\bmild\b/i.test(f.statement))throw Error('Separate serious-event findings from mild-event summaries to preserve severity and denominators');
    if(typeof f.statement!=='string'||!f.statement.trim()||f.statement.length>900||dangerous(f.statement))throw Error('Unsafe or invalid analysis statement');
    if(!Array.isArray(f.claim_ids)||!f.claim_ids.length||f.claim_ids.some(id=>!claimMap.has(id)))throw Error('Unsupported input claim reference');
    const claims=[...new Set(f.claim_ids)].map(id=>claimMap.get(id));
@@ -31,13 +32,13 @@ export function validateAnalysis(raw,packet){
    return {id:f.id,statement:f.statement,claim_ids:[...new Set(f.claim_ids)],support_quotes:f.support_quotes,source_ids:[...new Set(claims.flatMap(c=>c.source_ids))],applicable_populations:[...new Set(claims.map(c=>c.applicable_population).filter(Boolean))],limitations:[...new Set(claims.map(c=>c.caveats).filter(Boolean))],clinical_approval:false};
   });return {domain:section.domain,findings,gaps};
  });
- const findings=sections.flatMap(s=>s.findings);if(findings.length<3||sections.filter(s=>s.findings.length).length<3)throw Error('Insufficient supported analysis coverage');
- return {contract_version:CONTRACT_VERSION,approval_scope:'RESEARCH_ONLY',clinical_approval:false,publishing_allowed:false,sections,evidence_gaps:[...(packet.evidence_gaps||[]),...sections.flatMap(s=>s.gaps)],research_requests:sections.filter(s=>s.gaps.length).map(s=>({target_agent:'AGENT_02',status:'OPEN',domain:s.domain,questions:s.gaps})),combined_effect_claim_approved:false,care_boundary:'Complementary research analysis; no medication change or replacement of conventional medical care is authorized.'};
+ const findings=sections.flatMap(s=>s.findings);const used=new Set(findings.flatMap(f=>f.claim_ids));const missing=packet.claims.filter(c=>!used.has(c.claim_id));if(missing.length)throw Error('Accepted claims not covered: '+missing.map(c=>c.claim_id).join(', '));if(findings.length<3||sections.filter(s=>s.findings.length).length<3)throw Error('Insufficient supported analysis coverage');
+ return {contract_version:CONTRACT_VERSION,policy_version:'agent03-grounded-v2',approval_scope:'RESEARCH_ONLY',clinical_approval:false,publishing_allowed:false,sections,evidence_gaps:[...(packet.evidence_gaps||[]),...sections.flatMap(s=>s.gaps)],research_requests:sections.filter(s=>s.gaps.length).map(s=>({target_agent:'AGENT_02',status:'OPEN',domain:s.domain,questions:s.gaps})),input_claim_coverage_percent:100,combined_effect_claim_approved:false,care_boundary:'Complementary research analysis; no medication change or replacement of conventional medical care is authorized.'};
 }
 export function assessAnalysis(analysis,audit){
  const findings=analysis.sections.flatMap(s=>s.findings);
  if(!Array.isArray(audit?.findings)||audit.findings.length!==findings.length)throw Error('Complete support audit required');
  const ids=new Set();for(const a of audit.findings){if(ids.has(a.id)||!findings.some(f=>f.id===a.id)||typeof a.reason!=='string'||!a.reason.trim())throw Error('Invalid audit finding');ids.add(a.id);}
  const failed=audit.findings.filter(a=>a.verdict!=='SUPPORTED');const ready=failed.length===0;
- return {...analysis,analysis_status:ready?'READY_FOR_AGENT04':'REVISION_REQUIRED',quality:{domains_covered:analysis.sections.length,findings_total:findings.length,supported_findings:findings.length-failed.length,support_percent:Math.round((findings.length-failed.length)/findings.length*100),required_support_percent:100,citation_integrity_percent:100},support_audit:audit.findings,agent04_handoff:ready?{mode:'RESEARCH_SAFETY_REVIEW',analysis_sections:analysis.sections,evidence_gaps:analysis.evidence_gaps,research_requests:analysis.research_requests,clinical_approval:false,publishing_allowed:false}:null};
+ return {...analysis,analysis_status:ready?'READY_FOR_AGENT04':'REVISION_REQUIRED',quality:{domains_covered:analysis.sections.length,findings_total:findings.length,supported_findings:findings.length-failed.length,support_percent:Math.round((findings.length-failed.length)/findings.length*100),required_support_percent:100,citation_integrity_percent:100,input_claim_coverage_percent:analysis.input_claim_coverage_percent},support_audit:audit.findings,agent04_handoff:ready?{mode:'RESEARCH_SAFETY_REVIEW',analysis_sections:analysis.sections,evidence_gaps:analysis.evidence_gaps,research_requests:analysis.research_requests,clinical_approval:false,publishing_allowed:false}:null};
 }
