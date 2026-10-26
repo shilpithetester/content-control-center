@@ -20,8 +20,8 @@ export function validateAnalysis(raw,packet){
   if(!Array.isArray(section.findings)||section.findings.length>4)throw Error('Invalid findings');
   const gaps=Array.isArray(section.gaps)?section.gaps.filter(x=>typeof x==='string'&&x.trim()).map(x=>x.slice(0,600)):[];
   if(!section.findings.length&&!gaps.length)throw Error('Empty section must identify evidence gap');
-  const findings=section.findings.map(f=>{
-   if(typeof f.id!=='string'||!f.id.trim()||findingIds.has(f.id))throw Error('Duplicate/invalid finding ID');findingIds.add(f.id);
+  const findings=section.findings.map((f,fi)=>{
+   const findingId='A03_'+section.domain+'_'+(fi+1);findingIds.add(findingId);
    if(typeof f.statement==='string'&&/\bserious\b/i.test(f.statement)&&/\bmild\b/i.test(f.statement))throw Error('Separate serious-event findings from mild-event summaries to preserve severity and denominators');
    if(typeof f.statement!=='string'||!f.statement.trim()||f.statement.length>900||dangerous(f.statement))throw Error('Unsafe or invalid analysis statement');
    if(!Array.isArray(f.claim_ids)||!f.claim_ids.length||f.claim_ids.some(id=>!claimMap.has(id)))throw Error('Unsupported input claim reference');
@@ -29,11 +29,11 @@ export function validateAnalysis(raw,packet){
    if(!Array.isArray(f.support_quotes)||!f.support_quotes.length||f.support_quotes.some(q=>!f.claim_ids.includes(q.claim_id)||norm(q.quote).length<25||!norm(claimMap.get(q.claim_id)?.statement).includes(norm(q.quote)))||f.claim_ids.some(id=>!f.support_quotes.some(q=>q.claim_id===id)))throw Error('Supporting quote mismatch');
    const context=claims.map(c=>c.statement).join(' '),numbers=f.statement.match(/\d+(?:\.\d+)?/g)||[];
    if(numbers.some(n=>!new RegExp('(?:^|[^0-9])'+n.replace('.','\\.')+'(?:$|[^0-9])').test(context)))throw Error('Invented numeric fact');
-   return {id:f.id,statement:f.statement,claim_ids:[...new Set(f.claim_ids)],support_quotes:f.support_quotes,source_ids:[...new Set(claims.flatMap(c=>c.source_ids))],applicable_populations:[...new Set(claims.map(c=>c.applicable_population).filter(Boolean))],limitations:[...new Set(claims.map(c=>c.caveats).filter(Boolean))],clinical_approval:false};
+   return {id:findingId,statement:f.statement,claim_ids:[...new Set(f.claim_ids)],support_quotes:f.support_quotes,source_ids:[...new Set(claims.flatMap(c=>c.source_ids))],applicable_populations:[...new Set(claims.map(c=>c.applicable_population).filter(Boolean))],limitations:[...new Set(claims.map(c=>c.caveats).filter(Boolean))],clinical_approval:false};
   });return {domain:section.domain,findings,gaps};
  });
  const findings=sections.flatMap(s=>s.findings);const used=new Set(findings.flatMap(f=>f.claim_ids));const missing=packet.claims.filter(c=>!used.has(c.claim_id));if(missing.length)throw Error('Accepted claims not covered: '+missing.map(c=>c.claim_id).join(', '));if(findings.length<3||sections.filter(s=>s.findings.length).length<3)throw Error('Insufficient supported analysis coverage');
- return {contract_version:CONTRACT_VERSION,policy_version:'agent03-grounded-v2',approval_scope:'RESEARCH_ONLY',clinical_approval:false,publishing_allowed:false,sections,evidence_gaps:[...(packet.evidence_gaps||[]),...sections.flatMap(s=>s.gaps)],research_requests:sections.filter(s=>s.gaps.length).map(s=>({target_agent:'AGENT_02',status:'OPEN',domain:s.domain,questions:s.gaps})),input_claim_coverage_percent:100,combined_effect_claim_approved:false,care_boundary:'Complementary research analysis; no medication change or replacement of conventional medical care is authorized.'};
+ return {contract_version:CONTRACT_VERSION,policy_version:'agent03-grounded-v3',approval_scope:'RESEARCH_ONLY',clinical_approval:false,publishing_allowed:false,sections,evidence_gaps:[...(packet.evidence_gaps||[]),...sections.flatMap(s=>s.gaps)],research_requests:sections.filter(s=>s.gaps.length).map(s=>({target_agent:'AGENT_02',status:'OPEN',domain:s.domain,questions:s.gaps})),input_claim_coverage_percent:100,combined_effect_claim_approved:false,care_boundary:'Complementary research analysis; no medication change or replacement of conventional medical care is authorized.'};
 }
 export function assessAnalysis(analysis,audit){
  const findings=analysis.sections.flatMap(s=>s.findings);

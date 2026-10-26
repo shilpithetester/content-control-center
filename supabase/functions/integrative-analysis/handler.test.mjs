@@ -20,7 +20,7 @@ async function run({authorized=true,missing=false,hold=false,approved=true,badHa
   return {data:base[table]};
  },single:async()=>({data:table==='agent_executions'&&inserted?{id:'execution-1'}:base[table]}),then(resolve){resolve({data:[],error:null})}};return q}};
  const mockFetch=async(url,options)=>{network++;const body=JSON.parse(options.body);const isAudit=body.messages[0].content.includes('independent evidence-support');let output;
-  if(isAudit)output={findings:['F1','F2','F3'].map(id=>({id,verdict:unsupported?'UNSUPPORTED':'SUPPORTED',reason:unsupported?'Not supported':'Matches accepted evidence'}))};
+  if(isAudit)output={findings:JSON.parse(body.messages[1].content).findings.map(f=>({id:f.id,verdict:unsupported?'UNSUPPORTED':'SUPPORTED',reason:unsupported?'Not supported':'Matches accepted evidence'}))};
   else{generation++;output=raw();if(unsafeFirst&&generation===1)output.sections[1].findings[0].statement='Take 50 mg daily.';}
   return Response.json({usage:{total_tokens:100},choices:[{finish_reason:'stop',message:{content:JSON.stringify(output)}}]});
  };
