@@ -4,10 +4,10 @@ import vm from 'node:vm';
 import {readFileSync} from 'node:fs';
 import {stripTypeScriptTypes} from 'node:module';
 import {webcrypto} from 'node:crypto';
-import {approvedPacket,validateAnalysis,assessAnalysis,DOMAINS} from './analysis-policy.mjs';
+import {approvedPacket,validateAnalysis,assessAnalysis,attachInputQuotes,completeSections,DOMAINS} from './analysis-policy.mjs';
 import {packet,raw} from './fixtures.mjs';
 const reviewId='2e22c376-9002-4f7b-aa26-96c6889caa8b';
-async function run({authorized=true,missing=false,hold=false,approved=true,badHash=false,superseded=false,action='RUN',unsupported=false,unsafeFirst=false,holdAfter=false}={}){
+async function run({authorized=true,missing=false,hold=false,approved=true,badHash=false,superseded=false,action='RUN',unsupported=false,unsafeFirst=false,holdAfter=false,truncated=false}={}){
  const dossier={medical_claims:packet.claims,evidence_sources:packet.sources};
  const hash=[...new Uint8Array(await webcrypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify(dossier))))].map(x=>x.toString(16).padStart(2,'0')).join('');
  const review={id:reviewId,dossier_id:'dossier-1',content_item_id:'item-1',decision:approved?'APPROVED':'REQUEST_REVISION',review_source:'AUTOMATED_RESEARCH_EVIDENCE',findings:{status:'APPROVED_FOR_RESEARCH',approval_scope:'RESEARCH_ONLY',research_handoff_allowed:true,clinical_approval:false,publishing_allowed:false,dossier_sha256:badHash?'wrong':hash,accepted_claim_ids:['C1','C2','C3'],execution_id:'review-execution',handoff:packet}};
@@ -19,13 +19,13 @@ async function run({authorized=true,missing=false,hold=false,approved=true,badHa
   if(table==='agent_executions')return {data:{id:'review-execution',status:'COMPLETED',agent_code:'AGENT_02_EVIDENCE_REVIEW',output:{review_id:reviewId}}};
   return {data:base[table]};
  },single:async()=>({data:table==='agent_executions'&&inserted?{id:'execution-1'}:base[table]}),then(resolve){resolve({data:[],error:null})}};return q}};
- const mockFetch=async(url,options)=>{network++;const body=JSON.parse(options.body);const isAudit=body.messages[0].content.includes('independent evidence-support');let output;
-  if(isAudit)output={findings:['F1','F2','F3'].map(id=>({id,verdict:unsupported?'UNSUPPORTED':'SUPPORTED',reason:unsupported?'Not supported':'Matches accepted evidence'}))};
+ const mockFetch=async(url,options)=>{network++;const body=JSON.parse(options.body);assert.equal(body.thinking.type,'disabled');assert.equal(body.response_format.type,'json_object');const isAudit=body.messages[0].content.includes('independent evidence-support');let output;
+  if(isAudit)output={findings:JSON.parse(body.messages[1].content).findings.map(f=>({id:f.id,verdict:unsupported?'UNSUPPORTED':'SUPPORTED',reason:unsupported?'Not supported':'Matches accepted evidence'}))};
   else{generation++;output=raw();if(unsafeFirst&&generation===1)output.sections[1].findings[0].statement='Take 50 mg daily.';}
-  return Response.json({usage:{total_tokens:100},choices:[{finish_reason:'stop',message:{content:JSON.stringify(output)}}]});
+  return Response.json({usage:{total_tokens:100},choices:[{finish_reason:truncated?'length':'stop',message:{content:JSON.stringify(output)}}]});
  };
  const code=stripTypeScriptTypes(readFileSync(new URL('./index.ts',import.meta.url),'utf8').replace(/^import .*;\n/gm,''));
- vm.runInNewContext(code,{createClient:()=>admin,approvedPacket,validateAnalysis,assessAnalysis,DOMAINS,crypto:webcrypto,TextEncoder,Date,Request,Response,AbortSignal,fetch:mockFetch,Deno:{env:{get:()=> 'test-only'},serve:fn=>handler=fn}});
+ vm.runInNewContext(code,{createClient:()=>admin,approvedPacket,validateAnalysis,assessAnalysis,attachInputQuotes,completeSections,DOMAINS,crypto:webcrypto,TextEncoder,Date,Request,Response,AbortSignal,fetch:mockFetch,Deno:{env:{get:()=> 'test-only'},serve:fn=>handler=fn}});
  const response=await handler(new Request('https://example.test',{method:'POST',headers:{Authorization:'Bearer test'},body:JSON.stringify({action,review_id:reviewId,content_id:'HT-0003'})}));return {status:response.status,body:await response.json(),writes,filters,network,generation};
 }
 test('Agent03 authentication rejects before spending/writing',async()=>{const r=await run({authorized:false});assert.equal(r.status,401);assert.equal(r.network,0);assert.equal(r.writes.length,0)});
@@ -37,3 +37,5 @@ test('full analysis and separate audit save immutable dossier plus Agent04 input
 test('invalid first attempt is repaired in bounded iteration',async()=>{const r=await run({unsafeFirst:true});assert.equal(r.status,200);assert.equal(r.generation,2);assert.equal(r.body.analysis_status,'READY_FOR_AGENT04')});
 test('unsupported second audit never releases Agent04 handoff',async()=>{const r=await run({unsupported:true});assert.equal(r.status,200);assert.equal(r.generation,2);assert.equal(r.body.analysis_status,'REVISION_REQUIRED');assert.equal(r.writes.find(w=>w.table==='integrative_analysis_dossiers').value.dossier.agent04_handoff,null)});
 test('HOLD changed during run prevents artifact persistence',async()=>{const r=await run({holdAfter:true});assert.equal(r.status,500);assert.equal(r.writes.filter(w=>w.table==='integrative_analysis_dossiers').length,0);assert.equal(r.writes.at(-1).value.status,'FAILED')});
+
+test('truncated responses exhaust bounded retries without saving an analysis',async()=>{const r=await run({truncated:true});assert.equal(r.status,500);assert.equal(r.network,2);assert.equal(r.writes.some(w=>w.table==='integrative_analysis_dossiers'),false);assert.equal(r.writes.at(-1).value.status,'FAILED')});
