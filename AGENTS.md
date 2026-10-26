@@ -10,3 +10,5 @@
 - Maintain the original task tracker, existing Project Brain and Git-backed verification artifacts. Do not create duplicate project memory or impersonate a different owner to write checkpoints.
 
 - User explicitly authorized Agent03 end-to-end implementation, iterative fixes, regression testing and production merge on 26 October 2026. Preserve approved Agent02 input provenance; Agent04 handoff remains research-only.
+
+- User authorized Agent04 end-to-end implementation, paid DeepSeek checks, automatic revisions, regression testing and production merge on 26 October 2026. Agent05 receives only scoped research-safety output; clinical/publishing approval remains separate.
