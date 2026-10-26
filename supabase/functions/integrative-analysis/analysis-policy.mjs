@@ -12,6 +12,11 @@ export function approvedPacket(review,execution,currentHash){
  return p;
 }
 const dangerous=s=>/\b(cures?|guaranteed|prescribe|diagnose)\b|\b\d+(?:\.\d+)?\s*(?:mg|mcg|milligrams?|tablets?)\b|\b(?:stop|discontinue|replace|increase|reduce|start|take)\b.{0,45}\b(?:medication|medicine|drug|dose)\b/i.test(s);
+export function attachInputQuotes(raw,packet){
+ const claims=new Map(packet.claims.map(c=>[c.claim_id,c]));
+ if(!Array.isArray(raw?.sections))return raw;
+ return {...raw,sections:raw.sections.map(s=>({...s,findings:Array.isArray(s.findings)?s.findings.map(f=>({...f,support_quotes:Array.isArray(f.claim_ids)?f.claim_ids.map(claim_id=>({claim_id,quote:claims.get(claim_id)?.statement||''})):[]})):s.findings}))};
+}
 export function completeSections(raw){
  if(!Array.isArray(raw?.sections))return raw;
  const present=new Set(raw.sections.map(s=>s.domain));
