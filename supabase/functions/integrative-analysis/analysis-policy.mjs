@@ -12,6 +12,11 @@ export function approvedPacket(review,execution,currentHash){
  return p;
 }
 const dangerous=s=>/\b(cures?|guaranteed|prescribe|diagnose)\b|\b\d+(?:\.\d+)?\s*(?:mg|mcg|milligrams?|tablets?)\b|\b(?:stop|discontinue|replace|increase|reduce|start|take)\b.{0,45}\b(?:medication|medicine|drug|dose)\b/i.test(s);
+export function completeSections(raw){
+ if(!Array.isArray(raw?.sections))return raw;
+ const present=new Set(raw.sections.map(s=>s.domain));
+ return {...raw,sections:[...raw.sections,...DOMAINS.filter(d=>!present.has(d)).map(domain=>({domain,findings:[],gaps:['This analysis did not establish a supported finding for '+domain.replaceAll('_',' ')+'. Focused follow-up research is required.']}))]};
+}
 export function validateAnalysis(raw,packet){
  if(!Array.isArray(raw?.sections)||raw.sections.length!==DOMAINS.length)throw Error('All eight analysis sections required; received '+(Array.isArray(raw?.sections)?raw.sections.length:'no sections array'));
  const domains=new Set(),findingIds=new Set(),claimMap=new Map(packet.claims.map(c=>[c.claim_id,c]));

@@ -4,7 +4,7 @@ import vm from 'node:vm';
 import {readFileSync} from 'node:fs';
 import {stripTypeScriptTypes} from 'node:module';
 import {webcrypto} from 'node:crypto';
-import {approvedPacket,validateAnalysis,assessAnalysis,DOMAINS} from './analysis-policy.mjs';
+import {approvedPacket,validateAnalysis,assessAnalysis,completeSections,DOMAINS} from './analysis-policy.mjs';
 import {packet,raw} from './fixtures.mjs';
 const reviewId='2e22c376-9002-4f7b-aa26-96c6889caa8b';
 async function run({authorized=true,missing=false,hold=false,approved=true,badHash=false,superseded=false,action='RUN',unsupported=false,unsafeFirst=false,holdAfter=false,truncated=false}={}){
@@ -25,7 +25,7 @@ async function run({authorized=true,missing=false,hold=false,approved=true,badHa
   return Response.json({usage:{total_tokens:100},choices:[{finish_reason:truncated?'length':'stop',message:{content:JSON.stringify(output)}}]});
  };
  const code=stripTypeScriptTypes(readFileSync(new URL('./index.ts',import.meta.url),'utf8').replace(/^import .*;\n/gm,''));
- vm.runInNewContext(code,{createClient:()=>admin,approvedPacket,validateAnalysis,assessAnalysis,DOMAINS,crypto:webcrypto,TextEncoder,Date,Request,Response,AbortSignal,fetch:mockFetch,Deno:{env:{get:()=> 'test-only'},serve:fn=>handler=fn}});
+ vm.runInNewContext(code,{createClient:()=>admin,approvedPacket,validateAnalysis,assessAnalysis,completeSections,DOMAINS,crypto:webcrypto,TextEncoder,Date,Request,Response,AbortSignal,fetch:mockFetch,Deno:{env:{get:()=> 'test-only'},serve:fn=>handler=fn}});
  const response=await handler(new Request('https://example.test',{method:'POST',headers:{Authorization:'Bearer test'},body:JSON.stringify({action,review_id:reviewId,content_id:'HT-0003'})}));return {status:response.status,body:await response.json(),writes,filters,network,generation};
 }
 test('Agent03 authentication rejects before spending/writing',async()=>{const r=await run({authorized:false});assert.equal(r.status,401);assert.equal(r.network,0);assert.equal(r.writes.length,0)});
