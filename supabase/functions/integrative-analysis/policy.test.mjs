@@ -1,0 +1,17 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {approvedPacket,validateAnalysis,assessAnalysis,DOMAINS} from './analysis-policy.mjs';
+import {packet,raw} from './fixtures.mjs';
+const review={id:'review-1',decision:'APPROVED',review_source:'AUTOMATED_RESEARCH_EVIDENCE',findings:{status:'APPROVED_FOR_RESEARCH',approval_scope:'RESEARCH_ONLY',research_handoff_allowed:true,clinical_approval:false,publishing_allowed:false,dossier_sha256:'hash',accepted_claim_ids:['C1','C2','C3'],handoff:packet}};
+const origin={status:'COMPLETED',agent_code:'AGENT_02_EVIDENCE_REVIEW',output:{review_id:'review-1'}};
+test('input must have approved research provenance and immutable hash',()=>{assert.equal(approvedPacket(review,origin,'hash'),packet);assert.throws(()=>approvedPacket(review,origin,'changed'));assert.throws(()=>approvedPacket(review,{...origin,status:'RUNNING'},'hash'));assert.throws(()=>approvedPacket({...review,decision:'REQUEST_REVISION'},origin,'hash'))});
+test('excluded input claim cannot be smuggled into packet',()=>{assert.throws(()=>approvedPacket({...review,findings:{...review.findings,accepted_claim_ids:['C1']}},origin,'hash'))});
+test('analysis retains populations, caveats, source links and evidence gaps',()=>{const result=validateAnalysis(raw(),packet);assert.equal(result.sections.length,8);assert.deepEqual(result.sections[1].findings[0].source_ids,['PMID:1']);assert.deepEqual(result.sections[1].findings[0].limitations,['Observational only']);assert.equal(result.clinical_approval,false);assert.equal(result.publishing_allowed,false);assert.equal(result.research_requests.length,5)});
+test('unsupported claim IDs rejected',()=>{const x=raw();x.sections[1].findings[0].claim_ids=['C999'];assert.throws(()=>validateAnalysis(x,packet))});
+test('invented or mismatched quotes rejected',()=>{const x=raw();x.sections[1].findings[0].support_quotes[0].quote='This is a fabricated quote that was never in the input.';assert.throws(()=>validateAnalysis(x,packet))});
+test('new numeric claims rejected',()=>{const x=raw();x.sections[1].findings[0].statement='Diet reduces risk by 99 percent.';assert.throws(()=>validateAnalysis(x,packet))});
+test('dosing and medication substitution rejected',()=>{for(const text of ['Take 50 mg daily.','Stop your medication and use yoga.','This practice cures disease.']){const x=raw();x.sections[1].findings[0].statement=text;assert.throws(()=>validateAnalysis(x,packet))}});
+test('missing and duplicate domains rejected',()=>{const x=raw();x.sections.pop();assert.throws(()=>validateAnalysis(x,packet));const y=raw();y.sections[0].domain=y.sections[1].domain;assert.throws(()=>validateAnalysis(y,packet))});
+test('explicit gap is required when section has no evidence',()=>{const x=raw();x.sections[0].gaps=[];assert.throws(()=>validateAnalysis(x,packet))});
+test('duplicate finding IDs rejected',()=>{const x=raw();x.sections[2].findings[0].id='F1';assert.throws(()=>validateAnalysis(x,packet))});
+test('independent audit needs 100 percent supported findings',()=>{const a=validateAnalysis(raw(),packet);const audit={findings:['F1','F2','F3'].map(id=>({id,verdict:'SUPPORTED',reason:'Matches cited accepted claim'}))};const passed=assessAnalysis(a,audit);assert.equal(passed.analysis_status,'READY_FOR_AGENT04');assert.equal(passed.agent04_handoff.mode,'RESEARCH_SAFETY_REVIEW');audit.findings[0].verdict='UNSUPPORTED';assert.equal(assessAnalysis(a,audit).agent04_handoff,null);audit.findings.pop();assert.throws(()=>assessAnalysis(a,audit))});
