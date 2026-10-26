@@ -1,4 +1,4 @@
-export const POLICY_VERSION='agent04-safety-v1';
+export const POLICY_VERSION='agent04-safety-v2';
 export const AXES=['evidence_support','numbers_and_risk','population','causality','care_substitution','medication_interactions','contraindications','vulnerable_groups','red_flags','combined_efficacy','source_limitations'];
 export const norm=x=>String(x||'').normalize('NFKC').replace(/[^\p{L}\p{N}]+/gu,' ').trim().toLowerCase();
 export function inputPacket(record,execution){
@@ -26,6 +26,7 @@ export function assessBatch(findings,review,sources,claims){
  if(f.source_ids.some(id=>!sources.some(s=>s.source_id===id&&s.identity_verified&&!s.retracted&&s.abstract_text)))failures.push('Fresh source integrity failure');
  if(decision==='PASS'&&AXES.some(k=>!['PASS','NOT_APPLICABLE'].includes(r.checks[k])))decision='REVISE';
  if(failures.length)decision='EXCLUDE';
+ if(/\b(?:HbA1c|LDL|triglycerides)\b/i.test(f.statement)&&/\(-?0\.\d+\)/.test(f.statement)&&!/(?:\bSMD\b|standardized|mean difference|mmol|mg\/|percentage points)/i.test(f.statement)){decision='REVISE';r.checks.numbers_and_risk='REVISE';failures.push('Effect-size numbers lack a stated unit or measure; remove values or use only evidence-supported measure wording');}
  return {finding_id:f.id,domain:f.domain,decision,reason:r.reason,deterministic_failures:failures,checks:r.checks,statement:f.statement,claim_ids:f.claim_ids,source_ids:f.source_ids,applicable_populations:f.applicable_populations||[],limitations:f.limitations||[],clinical_approval:false};
  });
 }

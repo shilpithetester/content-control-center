@@ -8,10 +8,10 @@ import {inputPacket,assessBatch,validateRevision,report,AXES,POLICY_VERSION,norm
 import {approvedPacket} from '../integrative-analysis/analysis-policy.mjs';
 import {claims,sources,findings,packet} from './fixtures.mjs';
 const id='5d45477b-eef6-4dc1-b189-b6be6475793b';
-async function run({authorized=true,missing=false,hold=false,holdAfter=false,stale=false,badHash=false,action='RUN',truncated=false,revise=false,sourceBad=false}={}){
+async function run({authorized=true,missing=false,hold=false,holdAfter=false,stale=false,badHash=false,action='RUN',truncated=false,revise=false,sourceBad=false,wrongRelation=false}={}){
  const hash=async x=>[...new Uint8Array(await webcrypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify(x))))].map(x=>x.toString(16).padStart(2,'0')).join('');
  const parent={id:'parent',topic_brief_version:6,dossier:{claims}};
- const accepted={claims,sources};const review={id:'review',decision:'APPROVED',review_source:'AUTOMATED_RESEARCH_EVIDENCE',findings:{status:'APPROVED_FOR_RESEARCH',approval_scope:'RESEARCH_ONLY',research_handoff_allowed:true,clinical_approval:false,publishing_allowed:false,dossier_sha256:await hash(parent.dossier),execution_id:'review-origin',accepted_claim_ids:claims.map(c=>c.claim_id),handoff:accepted}};
+ const accepted={claims,sources};const review={id:'review',dossier_id:wrongRelation?'other':'parent',content_item_id:'content',decision:'APPROVED',review_source:'AUTOMATED_RESEARCH_EVIDENCE',findings:{status:'APPROVED_FOR_RESEARCH',approval_scope:'RESEARCH_ONLY',research_handoff_allowed:true,clinical_approval:false,publishing_allowed:false,dossier_sha256:await hash(parent.dossier),execution_id:'review-origin',accepted_claim_ids:claims.map(c=>c.claim_id),handoff:accepted}};
  const record={id,content_item_id:'content',execution_id:'origin',research_review_id:'review',research_dossier_id:'parent',input_sha256:badHash?'bad':await hash({review_id:'review',packet:accepted,topic_brief_version:6}),analysis_status:'READY_FOR_AGENT04',dossier:{analysis_status:'READY_FOR_AGENT04',approval_scope:'RESEARCH_ONLY',clinical_approval:false,publishing_allowed:false,sections:findings.map(f=>({domain:f.domain,findings:[f]})),agent04_handoff:{accepted_input_claims:claims,sources,context:packet.context},evidence_gaps:packet.evidence_gaps}};
  const writes=[],filters=[];let handler,network=0,reads=0,audits=0;
  const db={auth:{getUser:async()=>({data:{user:authorized?{id:'owner'}:null}})},from(table){let selection='',currentFilters=[];const q={select(s){selection=s;return q},eq(k,v){filters.push({table,k,v});currentFilters.push({k,v});return q},order(){return q},limit(){return q},insert(value){writes.push({table,action:'insert',value});return q},update(value){writes.push({table,action:'update',value});return q},maybeSingle:async()=>{
@@ -39,3 +39,5 @@ test('revision is automatic and independently rechecked before release',async()=
 test('fresh source mismatch fails before model calls',async()=>{const r=await run({sourceBad:true});assert.equal(r.status,500);assert.equal(r.network,0);assert.equal(r.writes.at(-1).value.status,'FAILED')});
 test('truncated audit cannot persist a report',async()=>{const r=await run({truncated:true});assert.equal(r.status,500);assert.equal(r.network,2);assert.equal(r.writes.some(w=>w.table==='medical_safety_reports'),false)});
 test('HOLD during execution prevents report persistence',async()=>{const r=await run({holdAfter:true});assert.equal(r.status,500);assert.equal(r.writes.some(w=>w.table==='medical_safety_reports'),false)});
+
+test('cross-dossier review relationship rejected before paid work',async()=>{const r=await run({wrongRelation:true});assert.equal(r.status,422);assert.equal(r.network,0);assert.equal(r.writes.length,0)});
