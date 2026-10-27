@@ -15,3 +15,5 @@ test('any unsupported editorial field blocks the Agent06 handoff',()=>{const c=v
 test('passing Agent06 packet preserves boundaries, source mapping and estimated SEO',()=>{const c=validateStrategy(raw(),packet()),r=assessStrategy(c,makeAudit(c),packet());assert.equal(r.strategy_status,'READY_FOR_AGENT06');assert.equal(r.keyword_research.status,'ESTIMATED_NOT_LIVE');assert.equal(r.publishing_allowed,false);assert.equal(r.agent06_handoff.clinical_approval,false);assert.deepEqual(r.safety_boundaries.excluded_finding_ids,['A03_sleep_2'])});
 
 test('source metadata includes only sources cited by passed findings',()=>{const x=structuredClone(record);x.report.agent05_handoff.sources.push({source_id:'PMID:999',title:'Excluded-only source',abstract_text:'private'});assert.equal(safetyPacket(x,origin).sources.some(s=>s.source_id==='PMID:999'),false)});
+
+test('viewer-facing copy rejects internal workflow wording',()=>{const x=raw();x.languages.english.hook='We review supplied evidence for you.';assert.throws(()=>validateStrategy(x,packet()),/workflow wording/)});
