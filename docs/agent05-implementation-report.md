@@ -1,0 +1,32 @@
+# Agent05 implementation and verification
+
+Approved scope: end-to-end YouTube content strategy from latest ready Agent04 safety report, automatic iterations, regression testing and production merge. No staging. Production source baseline 7d9ff98465dde536320016de0380129ce96264d8.
+
+## Contract
+Authenticated owner-scoped input must be latest Agent04 READY_FOR_AGENT05[_WITH_EXCLUSIONS] report, tied to a completed AGENT_04 execution and exact immutable Agent03 input hash. Latest Agent03 analysis and Agent02 research review are rechecked; HOLD stops the run, including when changed during execution. Agent04 accepted PASS findings must equal the safety report's own PASS decisions. Excluded findings and underlying claim text are not supplied to the strategy model. Only source metadata for accepted findings enters strategy/report; source abstracts are not used to create new claims. Original safety boundaries and evidence gaps are carried forward.
+
+The structured plan includes separate Hinglish and English title options, hooks, descriptions, thumbnails and CTAs; audience problem, objective, angle, estimated keywords/tags, chapter suggestions and section outline with visuals and engagement. Every section cites passed finding IDs; accepted facts and sources are attached server-side. Source and claim evidence, population and limitations remain visible. Keywords are editorial estimates, not verified volume or trends.
+
+A separate model audit checks every editorial field, with section text evaluated only against the passed findings mapped to that section. Any failed field blocks the Agent06 handoff and triggers bounded full revision/recheck; unsupported numerical claims, invented IDs, unsafe treatment/cure claims and malformed output fail closed. Two attempts, with retries for audit batch integrity. READY_FOR_AGENT06 is research-only: clinical approval and publishing permission remain false. Agent06 executor is not part of this implementation.
+
+## Storage and regression
+Additive content_strategy_reports table uses owner SELECT RLS, no client-write policy, append-only update/delete trigger. New JWT-protected content-strategy function stores report provenance, input hash, independent audit, attempt and token usage. Existing datasets are not overwritten. UI adds Content_strategy tab and automatic Agent04→Agent05 continuation while preserving old layout and tabs.
+
+136 tests pass, including 115 existing and 21 new Agent05 policy/handler/workflow regressions: authentication/ownership, input integrity, HOLD, changed safety/review, excluded claims/sources, bilingual shape, unsafe and invented numbers, exact section mapping, complete independent audit, unsupported field blocking, automatic revision, truncation, storage, and downstream failure status. Local frontend build passes with actual public project URL and a build-only placeholder public key. RLS and immutable trigger verified. Backend content-strategy v2 ACTIVE, source hash 1bbd7b0044d6ed4f64d29f6ff110913d707408c41ffaac0ac0fd7416258d0a4c. Live run and production release evidence pending.
+
+## Live verification and iteration
+First live execution 5f0ebe3c-7c4f-49a6-a128-0be30cab6bb1 failed closed on prohibited wording, without saving a strategy. Function v3 added field-specific feedback and clearer instructions. Authenticated execution 597e359c-3c92-4641-8e0d-62731ecbaf45 then automatically revised once and saved report e17c79ed-457d-4d02-9741-a40a1432abbc: all 49 editorial fields passed separate audit, 11 passed Agent04 findings used across five mapped sections; both excluded finding IDs preserved as boundaries. Runtime 30.974s, DeepSeek total tokens 33,351. Keyword suggestions explicitly estimated, not live metrics.
+
+Inspection identified unnatural audience-facing references to supplied research; v4 policy agent05-strategy-v2 explicitly forbids internal workflow wording in audience-facing language fields, adds regression and keeps all previous safety gates. 137 tests pass. Stricter live verification pending.
+
+
+Second successful execution d69f5c1f-c3d9-4441-9d78-8da953f563ca produced report 66a629b5-4cdf-4e93-8db3-99bed377c8cc under agent05-strategy-v2; 49/49 fields passed automated audit, 10 approved findings, two excluded IDs retained. Live output inspection found a viewer-facing unsupported claim that a routine works better and specific visual food details absent from mapped evidence; these were not considered satisfactory despite automated PASS. Policy v3 adds independent-audit instructions and deterministic checks for unsupported effect/current-guideline wording and unmapped visual food details. 139 tests and build pass; content-strategy v5 deployed source hash 09da5dc87d9b8db0ddce4d97b45829a4f142a2830843ce4976c87c8d6f5e1778.
+
+The next live request returned Unauthorized before creating an execution; Supabase auth logs reported Session not found. No prior output changed. A renewed authenticated session was used for the final live run below.
+
+## Final live run
+Agent05 execution `e40926ce-8095-44a6-b2cc-bd7d3931e9d6` on HT-0002 used safety report `8ec0bed0-4a4c-49c8-9442-912c5508a4a2` and saved `d5ecfab9-36e0-484f-8276-e11ac3c94e64` READY_FOR_AGENT06. Policy `agent05-strategy-v4`; function v6 ACTIVE source hash `fe9882a8404e735a0f8b406cc0a8535bb10572f664748dbbc93c3e00cba6049b`.
+
+Attempt 1 failed a wording guard; attempt 2 completed with all 53/53 editorial fields passing independent automated review, 12 approved findings across six outline sections, separate Hinglish and English plans and only generic evidence-supported visual directions. Both excluded Agent04 findings A03_nutrition_1 and A03_yoga_movement_1 remain excluded. Usage: deepseek-flash, 38,670 total tokens (33,734 prompt, 4,936 completion); 40.6 seconds. Search keywords/tags remain explicitly estimated; no live volume or ranking verification. Clinical and publishing approval remain false. This is an automated research check, not an independent clinical review.
+
+The strategy was created from an existing Agent04 report via authenticated preview and rendered with 53/53 fields in UI. Agent04→Agent05 automatic invocation, exact input and downstream error isolation were verified by workflow regressions; the complete Agent02→05 regeneration was not repeated in the live run. Historical reports remain immutable and are labeled earlier versions. 139 regression tests and frontend build pass. Earlier recorded Agent02 dossier checksums match.
