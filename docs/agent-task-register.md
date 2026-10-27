@@ -90,6 +90,26 @@ Agent 02–05 status above describes the released components, not proof that eve
 11. Record research requests for excluded or unresolved findings and preserve report, sources, checks and provenance.
 12. Send only PASS findings to Agent 05, together with audience restrictions, limitations, prohibited statements and gaps.
 
+### Agent 04 — full previously discussed responsibilities
+
+1. Input and provenance: verify content, owner, Topic Brief version, Agent 02 approval and Agent 03 output integrity.
+2. Medical fact checking: compare each factual statement, number, unit, percentage and study conclusion with cited evidence.
+3. Evidence quality: distinguish guidelines, reviews, trials and observational evidence; identify old, abstract-only or limited sources.
+4. Population applicability: prevent results for a specific group being widened to a general audience.
+5. Association versus causation: prevent an association becoming a prevention, treatment or guaranteed-benefit claim.
+6. Conventional-care protection: prevent yoga, nutrition or naturopathy replacing treatment, screening or medical care.
+7. Medication and supplement safety: flag unsupported changes to medication, dose, supplements or interactions.
+8. Contraindications and precautions: identify relevant evidence-backed precautions and record unavailable information as a gap.
+9. Vulnerable populations: check relevance and restrictions for pregnancy, children, older adults and chronic conditions.
+10. Red flags and escalation: identify relevant urgent symptoms/guidance and verify against authoritative evidence.
+11. Integrative-combination safety: prevent unsupported combination efficacy or safety conclusions.
+12. Risk and denominators: distinguish serious/mild, absolute/relative risk, incidence/prevalence and statistical denominators.
+13. Claim-level disposition: PASS, REVISE, EXCLUDE or INSUFFICIENT_EVIDENCE, with reasons and evidence.
+14. Missing-evidence routing: route research gaps to Agent 02 and synthesis corrections to Agent 03.
+15. Automatic revision and recheck: use bounded retries; hold unresolved findings back.
+16. Agent 05 handoff: provide allowed claims, prohibited statements, required caveats, audience restrictions and safe wording.
+17. Audit and history: preserve checks, decisions, sources, versions, iterations and executions.
+
 **Live evidence at checkpoint:** latest reported HT-0002 run reviewed 15 findings, passed 13 and excluded 2. These metrics are automated research checks, not clinical approval.
 
 ## Agent 05 — YouTube Content Strategist
@@ -108,6 +128,30 @@ Agent 02–05 status above describes the released components, not proof that eve
 10. Audit every editorial field separately; use bounded feedback-driven revision and re-audit.
 11. Save versioned owner-scoped strategy, input provenance, audit and usage without overwriting previous reports.
 12. Provide Agent 06 with the strategy, accepted evidence, language requirements, restrictions and unresolved gaps.
+
+### Agent 05 — full previously discussed responsibilities
+
+1. Input verification: confirm latest Agent 04 report, owner, content, provenance and research handoff.
+2. Approved evidence selection: use only passed findings and their references.
+3. Audience definition: identify audience needs, language and knowledge level from the Topic Brief.
+4. Video objective: specify what the viewer will understand and take away.
+5. Content angle and positioning: choose an audience-relevant angle supported by the available evidence.
+6. Search intent and keywords: prepare relevant terms; label them estimated when live search data is unavailable.
+7. Title options: create clear, attractive, keyword-aware titles without unsupported health promises or clickbait.
+8. Hook: create a factual opening connected to a real audience question.
+9. Video outline: arrange introduction, main sections, transitions, recap and conclusion.
+10. Section-wise claim mapping: attach approved finding IDs and source references to sections.
+11. Integrative framing: present conventional care, nutrition, yoga and lifestyle within available evidence and limits.
+12. Safety boundaries and caveats: carry population limits, precautions, evidence gaps and old-source qualifiers into the script brief.
+13. Hinglish and English strategy: prepare language, terminology and audience guidance for both versions.
+14. Retention and engagement: suggest appropriate questions, examples, recap and visual changes without new unsupported facts.
+15. CTA strategy: prepare topic-appropriate safe calls to action without treatment-change instructions or guarantees.
+16. Thumbnail and visual direction: suggest thumbnail text and section visuals without medical exaggeration.
+17. Description and metadata: draft video description, source references, relevant tags and chapter suggestions.
+18. Coverage and quality checks: ensure factual points map to approved evidence and exclude rejected findings.
+19. Automatic revision: revise and recheck failed safety, coverage or format checks within defined limits.
+20. Audit and history: preserve input report ID, strategy version, model usage, checks and revisions.
+21. Agent 06 handoff: provide verified strategy, outline, approved claims, sources, caveats and script-writing instructions.
 
 **Live evidence at checkpoint:** 53/53 editorial fields passed automated review, using 12 approved findings across 6 sections. The two Agent 04 exclusions remain outside the allowed findings. This does not establish clinical or publishing approval.
 
