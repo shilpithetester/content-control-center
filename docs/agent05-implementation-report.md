@@ -1,0 +1,15 @@
+# Agent05 implementation and verification
+
+Approved scope: end-to-end YouTube content strategy from latest ready Agent04 safety report, automatic iterations, regression testing and production merge. No staging. Production source baseline 7d9ff98465dde536320016de0380129ce96264d8.
+
+## Contract
+Authenticated owner-scoped input must be latest Agent04 READY_FOR_AGENT05[_WITH_EXCLUSIONS] report, tied to a completed AGENT_04 execution and exact immutable Agent03 input hash. Latest Agent03 analysis and Agent02 research review are rechecked; HOLD stops the run, including when changed during execution. Agent04 accepted PASS findings must equal the safety report's own PASS decisions. Excluded findings and underlying claim text are not supplied to the strategy model. Only source metadata for accepted findings enters strategy/report; source abstracts are not used to create new claims. Original safety boundaries and evidence gaps are carried forward.
+
+The structured plan includes separate Hinglish and English title options, hooks, descriptions, thumbnails and CTAs; audience problem, objective, angle, estimated keywords/tags, chapter suggestions and section outline with visuals and engagement. Every section cites passed finding IDs; accepted facts and sources are attached server-side. Source and claim evidence, population and limitations remain visible. Keywords are editorial estimates, not verified volume or trends.
+
+A separate model audit checks every editorial field, with section text evaluated only against the passed findings mapped to that section. Any failed field blocks the Agent06 handoff and triggers bounded full revision/recheck; unsupported numerical claims, invented IDs, unsafe treatment/cure claims and malformed output fail closed. Two attempts, with retries for audit batch integrity. READY_FOR_AGENT06 is research-only: clinical approval and publishing permission remain false. Agent06 executor is not part of this implementation.
+
+## Storage and regression
+Additive content_strategy_reports table uses owner SELECT RLS, no client-write policy, append-only update/delete trigger. New JWT-protected content-strategy function stores report provenance, input hash, independent audit, attempt and token usage. Existing datasets are not overwritten. UI adds Content_strategy tab and automatic Agent04→Agent05 continuation while preserving old layout and tabs.
+
+136 tests pass, including 115 existing and 21 new Agent05 policy/handler/workflow regressions: authentication/ownership, input integrity, HOLD, changed safety/review, excluded claims/sources, bilingual shape, unsafe and invented numbers, exact section mapping, complete independent audit, unsupported field blocking, automatic revision, truncation, storage, and downstream failure status. Local frontend build passes with actual public project URL and a build-only placeholder public key. RLS and immutable trigger verified. Backend content-strategy v2 ACTIVE, source hash 1bbd7b0044d6ed4f64d29f6ff110913d707408c41ffaac0ac0fd7416258d0a4c. Live run and production release evidence pending.
