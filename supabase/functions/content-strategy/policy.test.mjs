@@ -18,5 +18,5 @@ test('source metadata includes only sources cited by passed findings',()=>{const
 
 test('viewer-facing copy rejects internal workflow wording',()=>{const x=raw();x.languages.english.hook='We review supplied evidence for you.';assert.throws(()=>validateStrategy(x,packet()),/workflow wording/)});
 
-test('unsupported outcome or current guideline wording cannot pass in viewer copy',()=>{for(const text of ['A routine works better today','Kya kaam karta hai, kya nahi','What guidelines say']){const x=raw();x.languages.english.hook=text;assert.throws(()=>validateStrategy(x,packet()))}});
+test('unsupported outcome or current guideline wording cannot pass in viewer copy',()=>{for(const text of ['A routine works better today','Kya kaam karta hai, kya nahi','Kya sach mein kaam karta hai','What guidelines say']){const x=raw();x.languages.english.hook=text;assert.throws(()=>validateStrategy(x,packet()))}});
 test('visual food details require evidence in that section',()=>{const x=raw();x.strategy.sections[0].visual_direction='Illustrate legumes and vegetables.';assert.throws(()=>validateStrategy(x,packet()),/Visual food detail/)});
