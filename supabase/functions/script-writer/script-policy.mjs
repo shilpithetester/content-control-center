@@ -18,7 +18,7 @@ export function scriptPacket(record,origin,safety){
  return {context:h.context||{},languages:h.languages,sections,safety_boundaries:{...h.safety_boundaries,excluded_finding_ids:excluded},sources:h.sources||[]};
 }
 function unit(text,path,ids,allowed,facts){
- if(!nonempty(text,1200)||!Array.isArray(ids)||!ids.length||ids.some(id=>!allowed.has(id)))throw Error('Every spoken/on-screen line needs approved mapped finding IDs: '+path);
+ if(!nonempty(text,1200)||!Array.isArray(ids)||!ids.length||ids.some(id=>!allowed.has(id)))throw Error('Every spoken/on-screen line needs approved mapped finding IDs: '+path+'; allowed='+JSON.stringify([...allowed])+'; received='+JSON.stringify(ids));
  if(forbidden(text))throw Error('Unsafe prescribing, dosage or cure language in '+path);if((text.match(/A03_[a-z_]+_\d+/gi)||[]).some(id=>!ids.includes(id)))throw Error('Excluded or unknown finding reference in '+path);
  const allowedNums=facts.filter(f=>ids.includes(f.finding_id)).map(f=>f.statement).join(' ').match(/\d+(?:\.\d+)?/g)||[];
  if((text.match(/\d+(?:\.\d+)?/g)||[]).some(n=>!allowedNums.includes(n)))throw Error('Unapproved number in '+path);
