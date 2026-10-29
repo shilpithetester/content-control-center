@@ -6,7 +6,7 @@ import {stripTypeScriptTypes} from 'node:module';
 import {webcrypto} from 'node:crypto';
 import {scriptPacket,validateScript,assessScript,POLICY_VERSION} from './script-policy.mjs';
 import {record,origin,safety,raw} from './fixtures.mjs';
-async function run({authorized=true,missing=false,hold=false,holdAfter=false,stale=false,badHash=false,action='RUN',unsafe=false,auditRevision=false,truncated=false,changedReview=false,parityFail=false}={}){
+async function run({authorized=true,missing=false,hold=false,holdAfter=false,stale=false,badHash=false,action='RUN',unsafe=false,auditRevision=false,truncated=false,changedReview=false,parityFail=false,malformedOnce=false,malformedAlways=false}={}){
  const hash=async x=>[...new Uint8Array(await webcrypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify(x))))].map(x=>x.toString(16).padStart(2,'0')).join('');
  const rec=structuredClone(record);rec.input_sha256=badHash?'bad':await hash(safety.report);const analysis={id:'analysis',research_review_id:'review',research_dossier_id:'parent'};
  const writes=[],filters=[],prompts=[];let handler,network=0,reads=0,generation=0,auditCount=0;
@@ -23,7 +23,7 @@ async function run({authorized=true,missing=false,hold=false,holdAfter=false,sta
  if(b.messages[0].content.includes('separate evidence and health-safety')){auditCount++;out={checks:data.fields.map(x=>({path:x.path,verdict:auditRevision&&generation===1&&auditCount===1?'REVISE':'PASS',reason:'Within approved evidence'}))};}
  else if(b.messages[0].content.includes('independent bilingual script'))out={checks:data.pairs.map(x=>({path:x.path,verdict:parityFail?'REVISE':'PASS',reason:'Reviewed parity'}))};
  else {generation++;out=raw();if(unsafe&&generation===1)out.languages.english.sections[0].lines[0].text='Take 50 mg daily.';}
- return Response.json({usage:{total_tokens:10},choices:[{finish_reason:truncated?'length':'stop',message:{content:JSON.stringify(out)}}]});};
+ return Response.json({usage:{total_tokens:10},choices:[{finish_reason:truncated?'length':'stop',message:{content:JSON.stringify(out)+((malformedAlways||(malformedOnce&&network===1))?' trailing-invalid-json':'')}}]});};
  const code=stripTypeScriptTypes(readFileSync(new URL('./index.ts',import.meta.url),'utf8').replace(/^import .*;\n/gm,''));
  vm.runInNewContext(code,{createClient:()=>db,scriptPacket,validateScript,assessScript,POLICY_VERSION,crypto:webcrypto,TextEncoder,Date,Request,Response,AbortSignal,fetch:mockFetch,Deno:{env:{get:()=> 'test-only'},serve:fn=>handler=fn}});
  const r=await handler(new Request('https://example.test',{method:'POST',headers:{Authorization:'Bearer test'},body:JSON.stringify({action,strategy_report_id:rec.id,content_id:'HT-0002'})}));return {status:r.status,body:await r.json(),writes,filters,network,generation,prompts};
@@ -37,3 +37,6 @@ test('audit failure causes rewrite and full independent recheck',async()=>{const
 test('parity failure is recorded as revision and never hands off',async()=>{const r=await run({parityFail:true});assert.equal(r.status,200);assert.equal(r.generation,2);assert.equal(r.body.script_status,'REVISION_REQUIRED');assert.equal(r.writes.find(w=>w.table==='script_dossiers').value.dossier.agent07_handoff,null)});
 test('truncated model response never persists dossier',async()=>{const r=await run({truncated:true});assert.equal(r.status,500);assert.equal(r.network,2);assert.equal(r.writes.some(w=>w.table==='script_dossiers'),false)});
 test('HOLD changed during execution prevents persistence',async()=>{const r=await run({holdAfter:true});assert.equal(r.status,500);assert.equal(r.writes.some(w=>w.table==='script_dossiers'),false)});
+
+test('malformed JSON retries the complete response without accepting trailing text',async()=>{const r=await run({malformedOnce:true});assert.equal(r.status,200);assert.equal(r.body.script_status,'READY_FOR_AGENT07');assert.equal(r.generation,2)});
+test('persistent malformed JSON fails without saving scripts',async()=>{const r=await run({malformedAlways:true});assert.equal(r.status,500);assert.equal(r.network,4);assert.equal(r.writes.some(w=>w.table==='script_dossiers'),false)});
