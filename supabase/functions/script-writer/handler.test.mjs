@@ -6,7 +6,7 @@ import {stripTypeScriptTypes} from 'node:module';
 import {webcrypto} from 'node:crypto';
 import {scriptPacket,validateScript,assessScript,POLICY_VERSION} from './script-policy.mjs';
 import {record,origin,safety,raw} from './fixtures.mjs';
-async function run({authorized=true,missing=false,hold=false,holdAfter=false,stale=false,badHash=false,action='RUN',unsafe=false,auditRevision=false,auditEnglishRevision=false,truncated=false,changedReview=false,parityFail=false,malformedOnce=false,malformedAlways=false,slowAudits=false}={}){
+async function run({authorized=true,missing=false,hold=false,holdAfter=false,stale=false,badHash=false,action='RUN',unsafe=false,auditRevision=false,auditEnglishRevision=false,truncated=false,changedReview=false,parityFail=false,malformedOnce=false,malformedAlways=false,slowAudits=false,unwrapped=false}={}){
  const hash=async x=>[...new Uint8Array(await webcrypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify(x))))].map(x=>x.toString(16).padStart(2,'0')).join('');
  const rec=structuredClone(record);rec.input_sha256=badHash?'bad':await hash(safety.report);const analysis={id:'analysis',research_review_id:'review',research_dossier_id:'parent'};
  const writes=[],filters=[],prompts=[];let handler,network=0,reads=0,generation=0,auditCount=0,inFlight=0,maxInFlight=0;
@@ -22,7 +22,7 @@ async function run({authorized=true,missing=false,hold=false,holdAfter=false,sta
  const mockFetch=async(url,options)=>{network++;inFlight++;maxInFlight=Math.max(maxInFlight,inFlight);if(slowAudits)await new Promise(resolve=>setTimeout(resolve,2));const b=JSON.parse(options.body);assert.equal(b.thinking.type,'disabled');const data=JSON.parse(b.messages[1].content);prompts.push(data);let out;
  if(b.messages[0].content.includes('separate evidence and health-safety')){auditCount++;out={checks:data.fields.map(x=>({path:x.path,verdict:((auditRevision&&generation===1&&auditCount===1)||(auditEnglishRevision&&generation===1&&x.path.startsWith('english.')))?'REVISE':'PASS',reason:'Within approved evidence'}))};}
  else if(b.messages[0].content.includes('independent bilingual script'))out={checks:data.pairs.map(x=>({path:x.path,verdict:parityFail?'REVISE':'PASS',reason:'Reviewed parity'}))};
- else {generation=Math.max(generation,data.draft_attempt);out=raw();if(unsafe&&generation===1)out.languages.english.sections[0].lines[0].text='Take 50 mg daily.';out={script:out.languages[data.target_language]};}
+ else {generation=Math.max(generation,data.draft_attempt);out=raw();if(unsafe&&generation===1)out.languages.english.sections[0].lines[0].text='Take 50 mg daily.';out=unwrapped?out.languages[data.target_language]:{script:out.languages[data.target_language]};}
  inFlight--;return Response.json({usage:{total_tokens:10},choices:[{finish_reason:truncated?'length':'stop',message:{content:JSON.stringify(out)+((malformedAlways||(malformedOnce&&network===1))?' trailing-invalid-json':'')}}]});};
  const code=stripTypeScriptTypes(readFileSync(new URL('./index.ts',import.meta.url),'utf8').replace(/^import .*;\n/gm,''));
  vm.runInNewContext(code,{createClient:()=>db,scriptPacket,validateScript,assessScript,POLICY_VERSION,crypto:webcrypto,TextEncoder,Date,Request,Response,AbortSignal,fetch:mockFetch,Deno:{env:{get:()=> 'test-only'},serve:fn=>handler=fn}});
@@ -44,3 +44,6 @@ test('persistent malformed JSON fails without saving scripts',async()=>{const r=
 test('audit batches run with bounded concurrency and retain complete checks',async()=>{const r=await run({slowAudits:true});assert.equal(r.status,200);assert.equal(r.body.script_status,'READY_FOR_AGENT07');assert.equal(r.maxInFlight,2);assert.equal(r.body.quality.audited_fields,r.body.quality.script_fields)});
 
 test('English source correction receives prior draft and exact failed checks',async()=>{const r=await run({auditEnglishRevision:true});assert.equal(r.body.script_status,'READY_FOR_AGENT07');const en=r.prompts.filter(p=>p.target_language==='english');assert.equal(en.length,2);assert.deepEqual(en[1].previous_draft,raw().languages.english);assert.match(en[1].feedback,/REVISE/)});
+
+test('complete unwrapped single-language response still receives full validation',async()=>{const r=await run({unwrapped:true});assert.equal(r.status,200);assert.equal(r.body.script_status,'READY_FOR_AGENT07')});
+test('field audits receive only same-section caveat context and own finding IDs',async()=>{const r=await run();for(const batch of r.prompts.filter(p=>p.fields)){for(const f of batch.fields.filter(f=>f.section_context)){const section=f.path.split('.')[2];const own=raw().languages[f.path.split('.')[0]].sections.find(s=>s.section_id===section);assert.deepEqual(f.section_context.map(x=>x.text),[...own.lines,...own.onscreen].map(x=>x.text));}}});

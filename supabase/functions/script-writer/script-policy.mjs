@@ -41,7 +41,7 @@ export function validateScript(raw,packet){
    const onscreen=s.onscreen.map((x,j)=>unit(x.text,lang+'.sections.'+s.section_id+'.onscreen.'+j,x.finding_ids,allowed,brief.findings));
    if(forbidden(s.visual_cue)||forbidden(s.voice_direction)||/\b(?:vegetables|legumes|whole grains|healthy fats)\b/i.test(s.visual_cue)&&!brief.findings.some(f=>/\b(?:vegetables|legumes|whole grains|healthy fats)\b/i.test(f.statement)))throw Error('Unapproved visual or voice direction');
    if([s.visual_cue,s.voice_direction].some(text=>(text.match(/A03_[a-z_]+_\d+/gi)||[]).some(id=>!allowed.has(id))))throw Error('Excluded or unknown visual finding reference');const controls=[{path:lang+'.sections.'+s.section_id+'.visual_cue',text:s.visual_cue,finding_ids:brief.findings.map(f=>f.finding_id),kind:'visual'}, {path:lang+'.sections.'+s.section_id+'.voice_direction',text:s.voice_direction,finding_ids:brief.findings.map(f=>f.finding_id),kind:'voice'}];
-   auditable.push(...lines.map(x=>({...x,kind:'narration'})),...onscreen.map(x=>({...x,kind:'onscreen'})),...controls);
+   const section_context=[...lines,...onscreen].map(x=>({text:x.text,finding_ids:x.finding_ids}));auditable.push(...lines.map(x=>({...x,kind:'narration',section_context})),...onscreen.map(x=>({...x,kind:'onscreen',section_context})),...controls.map(x=>({...x,section_context})));
    const used=[...new Set([...lines,...onscreen].flatMap(x=>x.finding_ids))],facts=brief.findings.filter(f=>used.includes(f.finding_id));
    return {section_id:s.section_id,heading:brief.heading,lines,onscreen,visual_cue:s.visual_cue,voice_direction:s.voice_direction,approved_evidence:facts,source_ids:[...new Set(facts.flatMap(f=>f.source_ids))]};
   });
