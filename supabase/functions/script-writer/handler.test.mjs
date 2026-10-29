@@ -6,10 +6,10 @@ import {stripTypeScriptTypes} from 'node:module';
 import {webcrypto} from 'node:crypto';
 import {scriptPacket,validateScript,assessScript,POLICY_VERSION} from './script-policy.mjs';
 import {record,origin,safety,raw} from './fixtures.mjs';
-async function run({authorized=true,missing=false,hold=false,holdAfter=false,stale=false,badHash=false,action='RUN',unsafe=false,auditRevision=false,truncated=false,changedReview=false,parityFail=false,malformedOnce=false,malformedAlways=false}={}){
+async function run({authorized=true,missing=false,hold=false,holdAfter=false,stale=false,badHash=false,action='RUN',unsafe=false,auditRevision=false,truncated=false,changedReview=false,parityFail=false,malformedOnce=false,malformedAlways=false,slowAudits=false}={}){
  const hash=async x=>[...new Uint8Array(await webcrypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify(x))))].map(x=>x.toString(16).padStart(2,'0')).join('');
  const rec=structuredClone(record);rec.input_sha256=badHash?'bad':await hash(safety.report);const analysis={id:'analysis',research_review_id:'review',research_dossier_id:'parent'};
- const writes=[],filters=[],prompts=[];let handler,network=0,reads=0,generation=0,auditCount=0;
+ const writes=[],filters=[],prompts=[];let handler,network=0,reads=0,generation=0,auditCount=0,inFlight=0,maxInFlight=0;
  const db={auth:{getUser:async()=>({data:{user:authorized?{id:'owner'}:null}})},from(table){let selection='';const q={select(s){selection=s;return q},eq(k,v){filters.push({table,k,v});return q},order(){return q},limit(){return q},insert(value){writes.push({table,action:'insert',value});return q},update(value){writes.push({table,action:'update',value});return q},maybeSingle:async()=>{
  if(table==='content_items')return {data:{id:'item',hold:hold||(holdAfter&&++reads>1)}};
  if(table==='content_strategy_reports')return {data:missing?null:selection==='id'?{id:stale?'newer':rec.id}:rec};
@@ -19,14 +19,14 @@ async function run({authorized=true,missing=false,hold=false,holdAfter=false,sta
  if(table==='agent_executions')return {data:origin};
  if(table==='llm_settings')return {data:{provider:'deepseek',model:'deepseek-flash'}};
  return {data:null};},single:async()=>({data:{id:table==='agent_executions'?'script-execution':'script-dossier'}}),then(resolve){resolve({data:[],error:null})}};return q}};
- const mockFetch=async(url,options)=>{network++;const b=JSON.parse(options.body);assert.equal(b.thinking.type,'disabled');const data=JSON.parse(b.messages[1].content);prompts.push(data);let out;
+ const mockFetch=async(url,options)=>{network++;inFlight++;maxInFlight=Math.max(maxInFlight,inFlight);if(slowAudits)await new Promise(resolve=>setTimeout(resolve,2));const b=JSON.parse(options.body);assert.equal(b.thinking.type,'disabled');const data=JSON.parse(b.messages[1].content);prompts.push(data);let out;
  if(b.messages[0].content.includes('separate evidence and health-safety')){auditCount++;out={checks:data.fields.map(x=>({path:x.path,verdict:auditRevision&&generation===1&&auditCount===1?'REVISE':'PASS',reason:'Within approved evidence'}))};}
  else if(b.messages[0].content.includes('independent bilingual script'))out={checks:data.pairs.map(x=>({path:x.path,verdict:parityFail?'REVISE':'PASS',reason:'Reviewed parity'}))};
  else {generation++;out=raw();if(unsafe&&generation===1)out.languages.english.sections[0].lines[0].text='Take 50 mg daily.';}
- return Response.json({usage:{total_tokens:10},choices:[{finish_reason:truncated?'length':'stop',message:{content:JSON.stringify(out)+((malformedAlways||(malformedOnce&&network===1))?' trailing-invalid-json':'')}}]});};
+ inFlight--;return Response.json({usage:{total_tokens:10},choices:[{finish_reason:truncated?'length':'stop',message:{content:JSON.stringify(out)+((malformedAlways||(malformedOnce&&network===1))?' trailing-invalid-json':'')}}]});};
  const code=stripTypeScriptTypes(readFileSync(new URL('./index.ts',import.meta.url),'utf8').replace(/^import .*;\n/gm,''));
  vm.runInNewContext(code,{createClient:()=>db,scriptPacket,validateScript,assessScript,POLICY_VERSION,crypto:webcrypto,TextEncoder,Date,Request,Response,AbortSignal,fetch:mockFetch,Deno:{env:{get:()=> 'test-only'},serve:fn=>handler=fn}});
- const r=await handler(new Request('https://example.test',{method:'POST',headers:{Authorization:'Bearer test'},body:JSON.stringify({action,strategy_report_id:rec.id,content_id:'HT-0002'})}));return {status:r.status,body:await r.json(),writes,filters,network,generation,prompts};
+ const r=await handler(new Request('https://example.test',{method:'POST',headers:{Authorization:'Bearer test'},body:JSON.stringify({action,strategy_report_id:rec.id,content_id:'HT-0002'})}));return {status:r.status,body:await r.json(),writes,filters,network,generation,prompts,maxInFlight};
 }
 test('unauthenticated or other-owner input cannot run or write',async()=>{for(const x of [{authorized:false},{missing:true}]){const r=await run(x);assert.ok([401,404].includes(r.status));assert.equal(r.network,0);assert.equal(r.writes.length,0)}});
 test('LIST is owner scoped and never makes paid calls',async()=>{const r=await run({action:'LIST'});assert.equal(r.status,200);assert.equal(r.network,0);assert.ok(r.filters.some(f=>f.table==='script_dossiers'&&f.k==='owner_id'&&f.v==='owner'))});
@@ -40,3 +40,5 @@ test('HOLD changed during execution prevents persistence',async()=>{const r=awai
 
 test('malformed JSON retries the complete response without accepting trailing text',async()=>{const r=await run({malformedOnce:true});assert.equal(r.status,200);assert.equal(r.body.script_status,'READY_FOR_AGENT07');assert.equal(r.generation,2)});
 test('persistent malformed JSON fails without saving scripts',async()=>{const r=await run({malformedAlways:true});assert.equal(r.status,500);assert.equal(r.network,6);assert.equal(r.writes.some(w=>w.table==='script_dossiers'),false)});
+
+test('audit batches run with bounded concurrency and retain complete checks',async()=>{const r=await run({slowAudits:true});assert.equal(r.status,200);assert.equal(r.body.script_status,'READY_FOR_AGENT07');assert.equal(r.maxInFlight,2);assert.equal(r.body.quality.audited_fields,r.body.quality.script_fields)});
