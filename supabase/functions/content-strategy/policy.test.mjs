@@ -1,0 +1,22 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {safetyPacket,validateStrategy,assessStrategy} from './strategy-policy.mjs';
+import {record,origin,raw} from './fixtures.mjs';
+const packet=()=>safetyPacket(structuredClone(record),origin);
+const makeAudit=c=>({checks:c.audit_texts.map(t=>({path:t.path,verdict:'PASS',reason:'Consistent with approved findings'}))});
+test('accepts only real research-only Agent04 handoff with completed provenance',()=>{assert.equal(packet().findings.length,3);assert.throws(()=>safetyPacket(record,{...origin,status:'FAILED'}));const bad=structuredClone(record);bad.report.clinical_approval=true;assert.throws(()=>safetyPacket(bad,origin))});
+test('excluded findings or altered handoff cannot enter model input',()=>{const bad=structuredClone(record);bad.report.agent05_handoff.allowed_claims.push({...bad.report.claim_decisions.at(-1),decision:'PASS'});assert.throws(()=>safetyPacket(bad,origin));assert.equal(packet().findings.some(f=>f.finding_id==='A03_sleep_2'),false)});
+test('complete bilingual strategy ties each section to passed evidence',()=>{const c=validateStrategy(raw(),packet());assert.equal(c.strategy.sections.length,3);assert.equal(c.strategy.chapters.length,3);assert.ok(c.strategy.sections.every(s=>s.approved_evidence.length&&s.source_ids.length))});
+test('missing language, missing tags or unapproved evidence fails closed',()=>{for(const mutate of [x=>delete x.languages.english,x=>delete x.strategy.tags,x=>x.strategy.sections[0].finding_ids=['A03_sleep_2']]){const x=raw();mutate(x);assert.throws(()=>validateStrategy(x,packet()))}});
+test('invented numerical claims and treatment substitution are rejected',()=>{for(const text of ['Lose 30 pounds now','Replace medication with yoga','A guaranteed cure']){const x=raw();x.languages.english.titles[0]=text;assert.throws(()=>validateStrategy(x,packet()))}});
+test('unknown finding ID cannot be smuggled into creative text',()=>{const x=raw();x.languages.english.description='Try A03_sleep_2 for better health.';assert.throws(()=>validateStrategy(x,packet()))});
+test('independent review must cover all editorial fields exactly once',()=>{const c=validateStrategy(raw(),packet()),a=makeAudit(c);a.checks.pop();assert.throws(()=>assessStrategy(c,a,packet()));const b=makeAudit(c);b.checks[0].path=b.checks[1].path;assert.throws(()=>assessStrategy(c,b,packet()))});
+test('any unsupported editorial field blocks the Agent06 handoff',()=>{const c=validateStrategy(raw(),packet()),a=makeAudit(c);a.checks[0].verdict='REVISE';const r=assessStrategy(c,a,packet());assert.equal(r.strategy_status,'REVISION_REQUIRED');assert.equal(r.agent06_handoff,null)});
+test('passing Agent06 packet preserves boundaries, source mapping and estimated SEO',()=>{const c=validateStrategy(raw(),packet()),r=assessStrategy(c,makeAudit(c),packet());assert.equal(r.strategy_status,'READY_FOR_AGENT06');assert.equal(r.keyword_research.status,'ESTIMATED_NOT_LIVE');assert.equal(r.publishing_allowed,false);assert.equal(r.agent06_handoff.clinical_approval,false);assert.deepEqual(r.safety_boundaries.excluded_finding_ids,['A03_sleep_2'])});
+
+test('source metadata includes only sources cited by passed findings',()=>{const x=structuredClone(record);x.report.agent05_handoff.sources.push({source_id:'PMID:999',title:'Excluded-only source',abstract_text:'private'});assert.equal(safetyPacket(x,origin).sources.some(s=>s.source_id==='PMID:999'),false)});
+
+test('viewer-facing copy rejects internal workflow wording',()=>{const x=raw();x.languages.english.hook='We review supplied evidence for you.';assert.throws(()=>validateStrategy(x,packet()),/workflow wording/)});
+
+test('unsupported outcome or current guideline wording cannot pass in viewer copy',()=>{for(const text of ['A routine works better today','Kya kaam karta hai, kya nahi','Kya sach mein kaam karta hai','What guidelines say']){const x=raw();x.languages.english.hook=text;assert.throws(()=>validateStrategy(x,packet()))}});
+test('visual food details require evidence in that section',()=>{const x=raw();x.strategy.sections[0].visual_direction='Illustrate legumes and vegetables.';assert.throws(()=>validateStrategy(x,packet()),/Visual food detail/)});
