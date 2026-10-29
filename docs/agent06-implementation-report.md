@@ -1,6 +1,22 @@
 # Agent06 implementation and verification
 
-## Verified release candidate — 29 October 2026
+## Production release verified — 29 October 2026
+
+**Production is live at https://content-control-center-sigma.vercel.app/.** Release PR [#11](https://github.com/shilpithetester/content-control-center/pull/11) merged the verified workspace into `main` at `1d335196ddf944462c04397ed4d8e13b5e5cc8e2`. Its Vercel check succeeded: https://vercel.com/shilpithetesters-projects/content-control-center/AEtoP1SyKcbCUzF6u4GSZZYfVJVB . The canonical production page now shows Show password; live interaction confirmed password → text → password, with masking restored.
+
+The production merge tree `4fc62061f8a073a4c43dbf30bbd158c7ade053fb` exactly matches tested workspace commit `cde57837cdb4ae8040df19d43099cefdfa8f4e5b`. All 168 regression tests were rerun and passed before the main merge. No application code, database state or Edge Function changed during this release operation. Backend remains the previously verified JWT-protected script-writer v8.
+
+### Corrected branch diagnosis
+
+PR #10 had merged Agent06 into `feature/ui-responsive-workspace`, which Vercel treats as a preview branch. It had **not** merged into the actual production branch `main`. The user's Vercel dashboard screenshot explicitly identified main as the production branch and showed the old Agent05 deployment `8DtZoUcW2dYdXszrdCxcpLcnoSUV` at `62c94b2c926a0b79fdbe390c7a59260f6f121470`. Earlier statements calling the feature-branch merge a production-branch merge were incorrect and are superseded by this record.
+
+The Vercel connector still returned an empty project list and exact-project 404; that limited direct connector access but did not prevent the existing Git integration from deploying main. main was an ancestor of the verified workspace with zero divergent commits. PR #11 therefore preserved all approved Agent02–06 changes without replacing the preview or creating another project. No staging was created or used. Repository guidance now records main as the production release target.
+
+### Verification scope
+
+Production-origin verification covered live page rendering and Show password behavior. The authenticated Agent05→Agent06 real-provider execution, persistence and result rendering were verified on preview against the same live backend; an additional authenticated production-origin paid run was not repeated. Runtime-error scanning and Vercel observability configuration could not be queried through the restricted connector and are not claimed as verified. Prior production frontend `62c94b2c926a0b79fdbe390c7a59260f6f121470` remains available for rollback; immutable backend history is retained.
+
+## Verified implementation — 29 October 2026
 
 Agent06 authenticated preview execution `db550cb9-5699-48a3-8972-304ea84cdd49` completed with **READY_FOR_AGENT07**, immutable script dossier `c874d3ae-ebe6-4ad1-9776-2d55ee96c867`. All **112/112 script fields** and **9/9 bilingual parity pairs** passed, with zero unresolved checks. Three automatic draft attempts completed in 117306ms. The owner-authenticated UI displays the saved result and Agent06-ready workflow status.
 
@@ -14,7 +30,7 @@ The current runtime is JWT-verified script-writer v8, source hash `4a46030de40d8
 
 Live coverage: existing Agent05 report → authenticated Agent06 invocation → real DeepSeek generation and automatic corrections → independent audits → immutable persistence → owner UI rendering. Agent05→06 invocation and upstream/downstream error isolation are regression tested; the entire Agent02→06 paid regeneration was not repeated. Browser-driven continuation requires the calling page to remain open; it is not a durable background job system.
 
-Production release evidence will be appended after merge/deployment observation. Baseline frontend `62c94b2c926a0b79fdbe390c7a59260f6f121470` remains available for rollback; additive database history should be retained.
+Production deployment evidence is recorded above; the direct Vercel connector restriction does not block this completed Git-based release. Baseline frontend `62c94b2c926a0b79fdbe390c7a59260f6f121470` remains available for rollback; additive database history should be retained.
 
 Scope: complete Hinglish and English scripts from ready Agent05 strategy, automatic iterations, regression testing and production merge. No staging. Production baseline commit 62c94b2c926a0b79fdbe390c7a59260f6f121470.
 

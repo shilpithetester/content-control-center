@@ -23,7 +23,7 @@ Purpose: preserve the agreed agent responsibilities, dependencies and the latest
 | Agent 03 | Integrative Health Analysis | Approved Agent 02 packet → analysis and Agent 04 research packet | Implemented and production merged; see [Agent 03 implementation plan](agent03-implementation-plan.md). |
 | Agent 04 | Medical Safety & Fact Checker | Agent 03 packet → safety report and Agent 05 packet | Implemented and production merged; see [Agent 04 implementation report](agent04-implementation-report.md). |
 | Agent 05 | YouTube Content Strategist | Agent 04 report → content strategy and Agent 06 brief | Implemented and production merged; see [Agent 05 implementation report](agent05-implementation-report.md). |
-| Agent 06 | Health YouTube Script Writer | Agent 05 brief → bilingual scripts and production handoff | Implemented and authenticated live-verified; 168/168 regressions, 112/112 script fields and 9/9 parity checks pass. See [Agent06 verification and release report](agent06-implementation-report.md). |
+| Agent 06 | Health YouTube Script Writer | Agent 05 brief → bilingual scripts and production handoff | Implemented, authenticated live-verified and deployed to production via main release PR #11; PR #10 was the earlier workspace/preview integration. 168/168 regressions, 112/112 script fields and 9/9 parity checks pass. See [Agent06 verification and release report](agent06-implementation-report.md). |
 | Agent 07 | Visual Director | Script → visual direction | Future scope; responsibilities require detailed planning. |
 | Agent 08 | Video Production Coordinator | Scripts and visual direction → production coordination | Future scope; responsibilities require detailed planning. |
 | Agent 09 | Asset Generator | Production requirements → assets | Future scope; detailed implementation status needs confirmation. |
@@ -157,7 +157,7 @@ Agent 02–05 status above describes the released components, not proof that eve
 
 ## Agent 06 — Health YouTube Script Writer: detailed task list
 
-**Status:** implemented and authenticated preview-verified on 29 October 2026. See [Agent06 report](agent06-implementation-report.md) for coverage, release evidence and limits; items below remain the preserved requirements. **Input:** Agent 05 research-only brief and safety boundaries. **Output:** Hinglish script, English-only script, mapping/quality report and Agent 07 handoff.
+**Status:** implemented, authenticated preview-verified and production released through main on 29 October 2026. See [Agent06 report](agent06-implementation-report.md) for coverage, release evidence and limits; items below remain the preserved requirements. **Input:** Agent 05 research-only brief and safety boundaries. **Output:** Hinglish script, English-only script, mapping/quality report and Agent 07 handoff.
 
 ### A. Input and readiness
 
