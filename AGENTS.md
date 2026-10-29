@@ -16,3 +16,5 @@
 - User authorized Agent05 end-to-end implementation, automatic iterations, paid DeepSeek use, regression tests and production merge on 27 October 2026. Strategy uses Agent04 PASS findings only; Agent06 handoff remains research-only.
 
 - User authorized Agent06 end-to-end implementation, autonomous iterations, DeepSeek usage, regression tests and production merge on 27 October 2026. Scripts use Agent04 PASS findings and Agent05 approved brief only; Agent07 handoff remains research-only.
+
+- Vercel production is deployed from `main`. `feature/ui-responsive-workspace` and work branches are preview branches. A merge into a preview branch is not a production release. Target the release PR at `main`, preserve the verified application tree, and verify the canonical production origin after the Git deployment.
