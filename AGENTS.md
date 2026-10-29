@@ -14,3 +14,5 @@
 - User authorized Agent04 end-to-end implementation, paid DeepSeek checks, automatic revisions, regression testing and production merge on 26 October 2026. Agent05 receives only scoped research-safety output; clinical/publishing approval remains separate.
 
 - User authorized Agent05 end-to-end implementation, automatic iterations, paid DeepSeek use, regression tests and production merge on 27 October 2026. Strategy uses Agent04 PASS findings only; Agent06 handoff remains research-only.
+
+- User authorized Agent06 end-to-end implementation, autonomous iterations, DeepSeek usage, regression tests and production merge on 27 October 2026. Scripts use Agent04 PASS findings and Agent05 approved brief only; Agent07 handoff remains research-only.
